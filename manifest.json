@@ -1,0 +1,21 @@
+{
+  "short_name": "BoxTrack",
+  "name": "BoxTrack AI Inventory",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/679/679720.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/679/679720.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#4f46e5",
+  "background_color": "#ffffff",
+  "orientation": "portrait"
+}
