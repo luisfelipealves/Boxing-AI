@@ -1,0 +1,8 @@
+{
+  "name": "BoxWise AI",
+  "description": "Organize your storage boxes, track items with AI analysis, and manage inventory with QR codes.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
