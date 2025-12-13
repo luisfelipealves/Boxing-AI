@@ -1,9 +1,13 @@
-import { GoogleGenAI, Type, Schema, Chat } from "@google/genai";
+import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { AIAnalysisResult } from "../types";
 
 const getAiClient = () => {
-  // Fix: Use `process.env.API_KEY` directly as per guidelines, assuming it is always available.
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.error("API_KEY is missing");
+    throw new Error("API Key is missing. Please set the API_KEY environment variable.");
+  }
+  return new GoogleGenAI({ apiKey });
 };
 
 const fileToGenerativePart = (base64Data: string, mimeType: string) => {
@@ -15,7 +19,7 @@ const fileToGenerativePart = (base64Data: string, mimeType: string) => {
   };
 };
 
-const RESPONSE_SCHEMA: Schema = {
+const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     name: { type: Type.STRING, description: "The name of the item" },
@@ -29,7 +33,6 @@ const RESPONSE_SCHEMA: Schema = {
 export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisResult> => {
   const ai = getAiClient();
   
-  // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
   const base64Data = base64Image.split(',')[1];
   const mimeType = base64Image.substring(base64Image.indexOf(':') + 1, base64Image.indexOf(';'));
 
@@ -64,12 +67,8 @@ export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisR
 export const analyzeItemAudio = async (base64Audio: string): Promise<AIAnalysisResult> => {
   const ai = getAiClient();
 
-  // 1. Strip the Data URL prefix to get raw base64 (e.g. "data:audio/webm;base64,GkX...")
   const base64Data = base64Audio.split(',')[1];
-
-  // 2. Extract the actual MIME type from the header
-  // e.g. "data:audio/webm;codecs=opus;base64" -> extract "audio/webm"
-  let mimeType = 'audio/mp3'; // default fallback
+  let mimeType = 'audio/mp3'; 
   const mimeMatch = base64Audio.match(/data:([^;]+)/);
   if (mimeMatch && mimeMatch[1]) {
     mimeType = mimeMatch[1];

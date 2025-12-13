@@ -31,7 +31,8 @@ import {
   Copy,
   Share2,
   Check,
-  FilePenLine
+  FilePenLine,
+  RefreshCw
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { v4 as uuidv4 } from 'uuid';
@@ -42,7 +43,35 @@ import * as storage from './services/storageService';
 import { analyzeItemImage, analyzeItemAudio, createInventoryChat } from './services/geminiService';
 import { QRScanner } from './components/QRScanner';
 
-// --- COMPONENTS ---
+// --- UI COMPONENTS ---
+
+const PageLoader = ({ text = "Loading..." }: { text?: string }) => (
+  <div className="flex flex-col items-center justify-center h-[calc(100vh-150px)] bg-gray-50 dark:bg-gray-950">
+    <Loader2 className="animate-spin text-indigo-500" size={48} />
+    <p className="mt-4 text-gray-500 dark:text-gray-400">{text}</p>
+  </div>
+);
+
+const ErrorDisplay = ({ message, onRetry }: { message: string; onRetry?: () => void; }) => (
+  <div className="flex flex-col items-center justify-center h-[calc(100vh-150px)] bg-gray-50 dark:bg-gray-950 p-4">
+    <div className="text-center">
+        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 mx-auto">
+            <AlertTriangle size={32} />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Oops! Something went wrong.</h2>
+        <p className="text-gray-600 dark:text-gray-300 mb-6">{message}</p>
+        {onRetry && (
+            <button
+                onClick={onRetry}
+                className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 mx-auto"
+            >
+                <RefreshCw size={16} /> Try Again
+            </button>
+        )}
+    </div>
+  </div>
+);
+
 
 const AudioWaveform = ({ stream }: { stream: MediaStream }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -212,17 +241,21 @@ const SettingsPage = () => {
   const [importStatus, setImportStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const handleExport = () => {
-    const data = storage.getExportData();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `boxtrack_backup_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const handleExport = async () => {
+    try {
+      const data = await storage.getExportData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `boxtrack_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert("Failed to export data.");
+    }
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -230,15 +263,14 @@ const SettingsPage = () => {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const json = JSON.parse(event.target?.result as string);
-        const success = storage.importData(json);
+        const { success } = await storage.importData(json);
         if (success) {
-          setImportStatus({ type: 'success', msg: 'Data restored successfully! Restarting...' });
-          setTimeout(() => window.location.href = '/', 1500);
+          setImportStatus({ type: 'success', msg: 'Data restored successfully! Please refresh.' });
         } else {
-          setImportStatus({ type: 'error', msg: 'Invalid backup file.' });
+          setImportStatus({ type: 'error', msg: 'Invalid backup file or server error.' });
         }
       } catch (err) {
         setImportStatus({ type: 'error', msg: 'Failed to parse file.' });
@@ -249,21 +281,21 @@ const SettingsPage = () => {
   };
 
   const handleShareToGemini = async () => {
-    const inventoryText = storage.generateHumanReadableInventory();
-    const prompt = `You are my Inventory Assistant. Here is my current home inventory data. Please memorize it so I can ask you questions about where my things are.\n\n${inventoryText}\n\n[End of Data]\n\nI am ready to ask questions now.`;
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'BoxTrack Inventory',
-          text: prompt,
-        });
-      } catch (err) {
-        // User cancelled or failed, try copy
-        copyToClipboard(prompt);
-      }
-    } else {
-      copyToClipboard(prompt);
+    try {
+        const inventoryText = await storage.generateHumanReadableInventory();
+        const prompt = `You are my Inventory Assistant. Here is my current home inventory data. Please memorize it so I can ask you questions about where my things are.\n\n${inventoryText}\n\n[End of Data]\n\nI am ready to ask questions now.`;
+        
+        if (navigator.share) {
+            await navigator.share({
+              title: 'BoxTrack Inventory',
+              text: prompt,
+            });
+        } else {
+          copyToClipboard(prompt);
+        }
+    } catch (err) {
+      alert("Could not generate inventory context. Please try again.");
+      copyToClipboard("Failed to generate prompt. Please copy your inventory manually.");
     }
   };
 
@@ -320,8 +352,8 @@ const SettingsPage = () => {
           </div>
 
           <div className="space-y-3">
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 bg-yellow-50 dark:bg-yellow-900/10 p-3 rounded-lg border border-yellow-100 dark:border-yellow-900/30 text-center">
-              Your data is currently stored <strong>locally on this device</strong>.
+             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 bg-green-50 dark:bg-green-900/10 p-3 rounded-lg border border-green-100 dark:border-green-900/30 text-center">
+              Your data is now stored on a secure backend.
             </p>
 
             <button 
@@ -361,19 +393,41 @@ const SettingsPage = () => {
 
 const HomePage = () => {
   const [search, setSearch] = useState('');
-  const [boxes, setBoxes] = useState<Box[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
   const [showScanner, setShowScanner] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  
   const [filterMaterial, setFilterMaterial] = useState('');
   const [filterColor, setFilterColor] = useState('');
+  
+  const [boxes, setBoxes] = useState<Box[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const [fetchedBoxes, fetchedItems, fetchedLocations] = await Promise.all([
+        storage.getBoxes(),
+        storage.getItems(),
+        storage.getLocations(),
+      ]);
+      setBoxes(fetchedBoxes);
+      setItems(fetchedItems);
+      setLocations(fetchedLocations);
+    } catch (err) {
+      setError("Failed to load inventory. Please try again.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setBoxes(storage.getBoxes());
-    setItems(storage.getItems());
+    fetchData();
   }, []);
 
   const handleScan = (data: string) => {
@@ -381,15 +435,11 @@ const HomePage = () => {
     navigate(`/box/${data}`);
   };
 
-  // Compute unique materials and colors for filter dropdowns
   const uniqueMaterials = Array.from(new Set(items.map(i => i.material).filter(Boolean) as string[])).sort();
   const uniqueColors = Array.from(new Set(items.map(i => i.color).filter(Boolean) as string[])).sort();
 
-  // Filter boxes based on search term AND specific filters
   const filteredBoxes = boxes.filter(box => {
     const boxItems = items.filter(i => i.boxId === box.id);
-    
-    // 1. Text Search Match
     const term = search.toLowerCase();
     const boxNameMatch = box.name.toLowerCase().includes(term);
     const itemsTextMatch = boxItems.some(item => 
@@ -399,33 +449,20 @@ const HomePage = () => {
       (item.color && item.color.toLowerCase().includes(term))
     );
     const matchesText = !term || boxNameMatch || itemsTextMatch;
-
-    // 2. Material Filter Match (Box must contain at least one item of this material)
     const matchesMaterial = !filterMaterial || boxItems.some(i => i.material?.toLowerCase() === filterMaterial.toLowerCase());
-
-    // 3. Color Filter Match (Box must contain at least one item of this color)
     const matchesColor = !filterColor || boxItems.some(i => i.color?.toLowerCase() === filterColor.toLowerCase());
-
     return matchesText && matchesMaterial && matchesColor;
   });
 
   const activeFiltersCount = (filterMaterial ? 1 : 0) + (filterColor ? 1 : 0);
 
-  return (
-    <div className="pb-24">
-      {showScanner && <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} />}
-      
-      <Header 
-        title="BoxTrack AI" 
-        action={
-          <Link to="/settings" className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-            <Settings size={22} />
-          </Link>
-        }
-      />
-      
+  const renderContent = () => {
+    if (isLoading) return <PageLoader text="Loading your inventory..." />;
+    if (error) return <ErrorDisplay message={error} onRetry={fetchData} />;
+
+    return (
       <div className="p-4 space-y-4">
-        {/* Search Bar */}
+        {/* Search & Actions */}
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
@@ -525,11 +562,12 @@ const HomePage = () => {
             <div className="text-center py-10 text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
               <Package className="mx-auto mb-2 opacity-50" size={48} />
               <p>No boxes found.</p>
+              {search && <p className="text-xs mt-1">Try adjusting your search or filters.</p>}
             </div>
           ) : (
             <div className="space-y-3">
               {filteredBoxes.map(box => {
-                const location = storage.getLocations().find(l => l.id === box.locationId);
+                const location = locations.find(l => l.id === box.locationId);
                 const itemCount = items.filter(i => i.boxId === box.id).length;
                 
                 return (
@@ -553,57 +591,94 @@ const HomePage = () => {
           )}
         </div>
       </div>
+    );
+  };
+
+  return (
+    <div className="pb-24">
+      {showScanner && <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} />}
+      <Header 
+        title="BoxTrack AI" 
+        action={
+          <Link to="/settings" className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+            <Settings size={22} />
+          </Link>
+        }
+      />
+      {renderContent()}
     </div>
   );
 };
 
 const LocationsPage = () => {
   const [locations, setLocations] = useState<Location[]>([]);
+  const [boxes, setBoxes] = useState<Box[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
-  const [locationToDelete, setLocationToDelete] = useState<string | null>(null);
+  const [locationToDelete, setLocationToDelete] = useState<Location | null>(null);
 
-  useEffect(() => {
-    setLocations(storage.getLocations());
-  }, []);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleAdd = () => {
-    if (!newName.trim()) return;
-    const loc: Location = { id: uuidv4(), name: newName };
-    storage.addLocation(loc);
-    setLocations(storage.getLocations());
-    setNewName('');
-    setIsAdding(false);
+  const fetchData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [fetchedLocations, fetchedBoxes] = await Promise.all([
+        storage.getLocations(),
+        storage.getBoxes()
+      ]);
+      setLocations(fetchedLocations);
+      setBoxes(fetchedBoxes);
+    } catch (err) {
+      setError("Failed to load locations. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDelete = () => {
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleAdd = async () => {
+    if (!newName.trim()) return;
+    try {
+      const newLoc = await storage.addLocation({ name: newName });
+      setLocations(prev => [...prev, newLoc]);
+      setNewName('');
+      setIsAdding(false);
+    } catch (err) {
+      alert("Failed to add location.");
+    }
+  };
+
+  const handleDelete = async () => {
     if (locationToDelete) {
-      storage.deleteLocation(locationToDelete);
-      setLocations(storage.getLocations());
-      setLocationToDelete(null);
+      try {
+        await storage.deleteLocation(locationToDelete.id);
+        setLocations(prev => prev.filter(l => l.id !== locationToDelete.id));
+        setLocationToDelete(null);
+      } catch (err) {
+        alert("Failed to delete location.");
+      }
     }
   };
 
   const getDeleteMessage = () => {
     if (!locationToDelete) return "";
-    const boxCount = storage.getBoxes().filter(b => b.locationId === locationToDelete).length;
+    const boxCount = boxes.filter(b => b.locationId === locationToDelete.id).length;
     if (boxCount > 0) {
-      return `This location is assigned to ${boxCount} box${boxCount === 1 ? '' : 'es'}. Deleting it will unassign them.`;
+      return `This location is assigned to ${boxCount} box${boxCount === 1 ? '' : 'es'}. Deleting it will unassign them (this action may vary based on backend implementation).`;
     }
     return "Are you sure you want to delete this location?";
   };
 
-  return (
-    <div className="pb-24">
-      <Header 
-        title="Locations" 
-        action={
-          <button onClick={() => setIsAdding(true)} className="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 p-2 rounded-lg">
-            <Plus size={24} />
-          </button>
-        }
-      />
-      
+  const renderContent = () => {
+    if (isLoading) return <PageLoader text="Loading locations..." />;
+    if (error) return <ErrorDisplay message={error} onRetry={fetchData} />;
+
+    return (
       <div className="p-4">
         {isAdding && (
           <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mb-4 animate-in fade-in slide-in-from-top-2">
@@ -632,7 +707,7 @@ const LocationsPage = () => {
                 <span className="font-medium text-gray-900 dark:text-white">{loc.name}</span>
               </div>
               <button 
-                onClick={() => setLocationToDelete(loc.id)}
+                onClick={() => setLocationToDelete(loc)}
                 className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                 aria-label="Delete location"
               >
@@ -647,7 +722,20 @@ const LocationsPage = () => {
           )}
         </div>
       </div>
-
+    );
+  };
+  
+  return (
+    <div className="pb-24">
+      <Header 
+        title="Locations" 
+        action={
+          <button onClick={() => setIsAdding(true)} className="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 p-2 rounded-lg">
+            <Plus size={24} />
+          </button>
+        }
+      />
+      {renderContent()}
       <ConfirmDialog
         isOpen={!!locationToDelete}
         title="Delete Location"
@@ -673,34 +761,38 @@ const ChatPage = () => {
     { id: 'welcome', role: 'model', text: 'Hi! I\'m your BoxTrack Assistant. Ask me anything about your inventory, like "Where is my drill?" or "What is in the attic?".' }
   ]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const chatSessionRef = useRef<Chat | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const initializeChat = () => {
-      // Gather all data
-      const locations = storage.getLocations();
-      const boxes = storage.getBoxes();
-      const items = storage.getItems();
+    const initializeChat = async () => {
+      try {
+        const locations = await storage.getLocations();
+        const boxes = await storage.getBoxes();
+        const items = await storage.getItems();
 
-      // Create a structured context object
-      const inventoryData = boxes.map(box => {
-        const locName = locations.find(l => l.id === box.locationId)?.name || 'Unknown';
-        const boxItems = items.filter(i => i.boxId === box.id).map(i => ({
-          name: i.name,
-          description: i.description,
-          material: i.material,
-          color: i.color
-        }));
-        return {
-          boxName: box.name,
-          location: locName,
-          contents: boxItems
-        };
-      });
+        const inventoryData = boxes.map(box => {
+          const locName = locations.find(l => l.id === box.locationId)?.name || 'Unknown';
+          const boxItems = items.filter(i => i.boxId === box.id).map(i => ({
+            name: i.name,
+            description: i.description,
+            material: i.material,
+            color: i.color
+          }));
+          return {
+            boxName: box.name,
+            location: locName,
+            contents: boxItems
+          };
+        });
 
-      // Initialize Gemini Chat
-      chatSessionRef.current = createInventoryChat(JSON.stringify(inventoryData, null, 2));
+        chatSessionRef.current = createInventoryChat(JSON.stringify(inventoryData, null, 2));
+      } catch (error) {
+        setMessages(prev => [...prev, { id: uuidv4(), role: 'model', text: "Sorry, I couldn't load your inventory data to start the chat.", isError: true }]);
+      } finally {
+        setIsInitializing(false);
+      }
     };
 
     initializeChat();
@@ -718,7 +810,6 @@ const ChatPage = () => {
     setInput('');
     setIsLoading(true);
     
-    // Add user message
     setMessages(prev => [...prev, { id: uuidv4(), role: 'user', text: userText }]);
 
     try {
@@ -761,7 +852,7 @@ const ChatPage = () => {
             </div>
           </div>
         ))}
-        {isLoading && (
+        {(isLoading || isInitializing) && (
           <div className="flex justify-start">
              <div className="bg-white dark:bg-gray-800 rounded-2xl rounded-bl-none px-4 py-3 border border-gray-200 dark:border-gray-700 shadow-sm">
                 <div className="flex space-x-1">
@@ -783,11 +874,11 @@ const ChatPage = () => {
             onChange={e => setInput(e.target.value)}
             placeholder="Ask about your inventory..."
             className="flex-1 px-4 py-3 bg-gray-100 dark:bg-gray-800 border-0 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900 dark:text-white placeholder-gray-500"
-            disabled={isLoading}
+            disabled={isLoading || isInitializing}
           />
           <button 
             type="submit" 
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim() || isLoading || isInitializing}
             className="bg-indigo-600 text-white p-3 rounded-xl shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 disabled:opacity-50 disabled:shadow-none transition-all"
           >
             <Send size={20} />
@@ -804,26 +895,38 @@ const BoxFormPage = () => {
   const [name, setName] = useState('');
   const [locationId, setLocationId] = useState('');
   const [description, setDescription] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const locs = storage.getLocations();
-    setLocations(locs);
-    if (locs.length > 0) setLocationId(locs[0].id);
+    const fetchLocations = async () => {
+      try {
+        const locs = await storage.getLocations();
+        setLocations(locs);
+        if (locs.length > 0) setLocationId(locs[0].id);
+      } catch (err) {
+        // Error is handled by showing disabled state
+        console.error("Failed to load locations for new box form");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchLocations();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !locationId) return;
 
-    const newBox: Box = {
-      id: uuidv4(),
-      locationId,
-      name,
-      description
-    };
-    storage.addBox(newBox);
-    navigate(`/box/${newBox.id}`);
+    try {
+      const newBoxData = { locationId, name, description };
+      const newBox = await storage.addBox(newBoxData);
+      navigate(`/box/${newBox.id}`);
+    } catch (err) {
+      alert("Failed to create box. Please try again.");
+    }
   };
+
+  if (isLoading) return <PageLoader text="Loading form..." />;
 
   return (
     <div className="pb-10">
@@ -886,214 +989,172 @@ const BoxDetailPage = () => {
   const [box, setBox] = useState<Box | undefined>();
   const [locationName, setLocationName] = useState('');
   const [items, setItems] = useState<Item[]>([]);
+  const [allBoxes, setAllBoxes] = useState<Box[]>([]);
+  
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [showPrintLabel, setShowPrintLabel] = useState(false);
   const [isMovingItem, setIsMovingItem] = useState<string | null>(null);
-  
-  // Deletion States
   const [showDeleteBoxConfirm, setShowDeleteBoxConfirm] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchData = async () => {
     if (!id) return;
-    const b = storage.getBoxById(id);
-    if (b) {
-      setBox(b);
-      const loc = storage.getLocations().find(l => l.id === b.locationId);
-      setLocationName(loc?.name || 'Unknown');
-      setItems(storage.getItems().filter(i => i.boxId === b.id));
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [b, allLocs, allItems, everyBox] = await Promise.all([
+        storage.getBoxById(id),
+        storage.getLocations(),
+        storage.getItems(),
+        storage.getBoxes()
+      ]);
+      
+      if (b) {
+        setBox(b);
+        const loc = allLocs.find(l => l.id === b.locationId);
+        setLocationName(loc?.name || 'Unknown');
+        setItems(allItems.filter(i => i.boxId === b.id));
+        setAllBoxes(everyBox);
+      } else {
+        setError("Box not found.");
+      }
+    } catch (err) {
+      setError("Failed to load box details.");
+    } finally {
+      setIsLoading(false);
     }
+  };
+  
+  useEffect(() => {
+    fetchData();
   }, [id]);
 
-  const handleMoveItem = (targetBoxId: string) => {
+  const handleMoveItem = async (targetBoxId: string) => {
     if (isMovingItem && id) {
-      storage.moveItem(isMovingItem, targetBoxId);
-      setItems(prev => prev.filter(i => i.id !== isMovingItem));
-      setIsMovingItem(null);
+      try {
+        await storage.moveItem(isMovingItem, targetBoxId);
+        setItems(prev => prev.filter(i => i.id !== isMovingItem));
+        setIsMovingItem(null);
+      } catch (err) {
+        alert("Failed to move item.");
+      }
     }
   };
 
-  const handleConfirmDeleteBox = () => {
+  const handleConfirmDeleteBox = async () => {
     if (!box) return;
-    storage.deleteBox(box.id);
-    setShowDeleteBoxConfirm(false);
-    navigate('/', { replace: true });
-  };
-
-  const handleConfirmDeleteItem = () => {
-    if (itemToDelete) {
-      storage.deleteItem(itemToDelete);
-      setItems(prev => prev.filter(i => i.id !== itemToDelete));
-      setItemToDelete(null);
+    try {
+      await storage.deleteBox(box.id);
+      setShowDeleteBoxConfirm(false);
+      navigate('/', { replace: true });
+    } catch (err) {
+      alert("Failed to delete box.");
     }
   };
 
-  if (!box) return <div className="p-10 text-center text-gray-500 dark:text-gray-400">Box not found or was deleted.</div>;
+  const handleConfirmDeleteItem = async () => {
+    if (itemToDelete) {
+      try {
+        await storage.deleteItem(itemToDelete);
+        setItems(prev => prev.filter(i => i.id !== itemToDelete));
+        setItemToDelete(null);
+      } catch (err) {
+        alert("Failed to delete item.");
+      }
+    }
+  };
+
+  const renderContent = () => {
+    if (isLoading) return <PageLoader text="Loading box details..." />;
+    if (error) return <ErrorDisplay message={error} onRetry={fetchData} />;
+    if (!box) return <ErrorDisplay message="This box could not be found." />;
+
+    return (
+      <>
+        <div className="bg-white dark:bg-gray-800 p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center text-gray-500 dark:text-gray-400 mb-2">
+            <MapPin size={16} className="mr-1" />
+            <span className="text-sm font-medium">{locationName}</span>
+          </div>
+          <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">{box.description || "No description provided."}</p>
+        </div>
+
+        <div className="p-4">
+          <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center justify-between">
+            <span>Contents ({items.length})</span>
+          </h3>
+
+          <div className="space-y-4">
+            {items.map(item => (
+              <div key={item.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex">
+                <div className="w-16 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-center border-r border-gray-100 dark:border-gray-700 flex-shrink-0">
+                  <BoxIcon className="text-gray-300 dark:text-gray-500" size={24} />
+                </div>
+                <div className="p-3 flex-1 flex flex-col justify-between">
+                  <div>
+                    <h4 className="font-medium text-gray-900 dark:text-white leading-tight mb-1">{item.name}</h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">{item.description}</p>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {item.material && <span className="inline-flex items-center text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full uppercase tracking-wider">{item.material}</span>}
+                      {item.color && <span className="inline-flex items-center text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full uppercase tracking-wider"><Palette size={10} className="mr-1" />{item.color}</span>}
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 mt-2">
+                    <Link to={`/box/${box.id}/edit-item/${item.id}`} className="p-1.5 text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/30 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900/50 transition-colors" title="Edit Item"><FilePenLine size={16} /></Link>
+                    <button onClick={() => setIsMovingItem(item.id)} className="p-1.5 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors" title="Move Item"><Move size={16} /></button>
+                    <button onClick={() => setItemToDelete(item.id)} className="p-1.5 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors" title="Delete"><Trash2 size={16} /></button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {items.length === 0 && <div className="text-center py-8 text-gray-400 dark:text-gray-500 italic">This box is empty.</div>}
+          </div>
+        </div>
+
+        <Link to={`/box/${box.id}/add-item`} className="fixed bottom-20 right-6 bg-indigo-600 text-white p-4 rounded-full shadow-xl shadow-indigo-500/40 hover:bg-indigo-700 active:scale-95 transition-all z-10"><Plus size={28} /></Link>
+      </>
+    );
+  };
 
   return (
     <div className="pb-24 relative">
       <Header 
-        title={box.name} 
+        title={box?.name || "..."}
         backTo="/" 
         action={
           <>
-            <Link
-              to={`/box/${box.id}/edit`}
-              className="text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded-full transition-colors"
-              title="Edit Box"
-            >
-              <FilePenLine size={24} />
-            </Link>
-            <button 
-              onClick={() => setShowDeleteBoxConfirm(true)}
-              className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded-full transition-colors"
-              title="Delete Box"
-            >
-              <Trash2 size={24} />
-            </button>
-            <button 
-              onClick={() => setShowPrintLabel(true)}
-              className="text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded-full transition-colors"
-              title="Print Label"
-            >
-              <Printer size={24} />
-            </button>
+            <Link to={`/box/${id}/edit`} className="text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded-full transition-colors" title="Edit Box"><FilePenLine size={24} /></Link>
+            <button onClick={() => setShowDeleteBoxConfirm(true)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 p-2 rounded-full transition-colors" title="Delete Box"><Trash2 size={24} /></button>
+            <button onClick={() => setShowPrintLabel(true)} className="text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded-full transition-colors" title="Print Label"><Printer size={24} /></button>
           </>
         }
       />
+      {renderContent()}
 
-      <div className="bg-white dark:bg-gray-800 p-6 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center text-gray-500 dark:text-gray-400 mb-2">
-          <MapPin size={16} className="mr-1" />
-          <span className="text-sm font-medium">{locationName}</span>
-        </div>
-        <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">{box.description || "No description provided."}</p>
-      </div>
-
-      <div className="p-4">
-        <h3 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center justify-between">
-          <span>Contents ({items.length})</span>
-        </h3>
-
-        <div className="space-y-4">
-          {items.map(item => (
-            <div key={item.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex">
-              {/* Simplified Icon Container */}
-              <div className="w-16 bg-gray-50 dark:bg-gray-700/50 flex items-center justify-center border-r border-gray-100 dark:border-gray-700 flex-shrink-0">
-                <BoxIcon className="text-gray-300 dark:text-gray-500" size={24} />
-              </div>
-
-              <div className="p-3 flex-1 flex flex-col justify-between">
-                <div>
-                  <h4 className="font-medium text-gray-900 dark:text-white leading-tight mb-1">{item.name}</h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1">{item.description}</p>
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {item.material && (
-                      <span className="inline-flex items-center text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                        {item.material}
-                      </span>
-                    )}
-                    {item.color && (
-                      <span className="inline-flex items-center text-[10px] font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                        <Palette size={10} className="mr-1" />
-                        {item.color}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 mt-2">
-                  <Link
-                    to={`/box/${box.id}/edit-item/${item.id}`}
-                    className="p-1.5 text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/30 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-900/50 transition-colors"
-                    title="Edit Item"
-                  >
-                    <FilePenLine size={16} />
-                  </Link>
-                  <button 
-                    onClick={() => setIsMovingItem(item.id)}
-                    className="p-1.5 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
-                    title="Move Item"
-                  >
-                    <Move size={16} />
-                  </button>
-                  <button 
-                    onClick={() => setItemToDelete(item.id)}
-                    className="p-1.5 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-          {items.length === 0 && (
-            <div className="text-center py-8 text-gray-400 dark:text-gray-500 italic">This box is empty.</div>
-          )}
-        </div>
-      </div>
-
-      {/* Floating Action Button */}
-      <Link 
-        to={`/box/${box.id}/add-item`}
-        className="fixed bottom-20 right-6 bg-indigo-600 text-white p-4 rounded-full shadow-xl shadow-indigo-500/40 hover:bg-indigo-700 active:scale-95 transition-all z-10"
-      >
-        <Plus size={28} />
-      </Link>
-
-      {/* Dialogs */}
-      <ConfirmDialog
-        isOpen={showDeleteBoxConfirm}
-        title="Delete Box"
-        message={`Are you sure you want to delete "${box.name}"? This will also permanently delete all ${items.length} items inside it.`}
-        onConfirm={handleConfirmDeleteBox}
-        onCancel={() => setShowDeleteBoxConfirm(false)}
-        isDestructive={true}
-      />
-
-      <ConfirmDialog
-        isOpen={!!itemToDelete}
-        title="Delete Item"
-        message="Are you sure you want to delete this item?"
-        onConfirm={handleConfirmDeleteItem}
-        onCancel={() => setItemToDelete(null)}
-        isDestructive={true}
-      />
-
-      {/* Print Label Modal */}
-      {showPrintLabel && (
+      <ConfirmDialog isOpen={showDeleteBoxConfirm} title="Delete Box" message={`Are you sure you want to delete "${box?.name}"? This will also permanently delete all ${items.length} items inside it.`} onConfirm={handleConfirmDeleteBox} onCancel={() => setShowDeleteBoxConfirm(false)} isDestructive={true} />
+      <ConfirmDialog isOpen={!!itemToDelete} title="Delete Item" message="Are you sure you want to delete this item?" onConfirm={handleConfirmDeleteItem} onCancel={() => setItemToDelete(null)} isDestructive={true} />
+      
+      {showPrintLabel && box && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl max-w-sm w-full text-center shadow-2xl">
             <h3 className="text-lg font-bold mb-1 text-gray-900 dark:text-white">Box Label</h3>
             <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">Print and stick this on your box</p>
-            
             <div className="border-4 border-black p-4 inline-block bg-white text-black" id="printable-area">
               <h2 className="text-2xl font-black text-black mb-4 uppercase tracking-tighter">{box.name}</h2>
-              <div className="flex justify-center mb-4">
-                <QRCode value={box.id} size={160} />
-              </div>
+              <div className="flex justify-center mb-4"><QRCode value={box.id} size={160} /></div>
               <p className="text-xs font-mono text-gray-500">{box.id}</p>
               <p className="text-sm font-bold mt-2 text-black">{locationName}</p>
             </div>
-
             <div className="mt-8 flex gap-3">
-              <button 
-                onClick={() => setShowPrintLabel(false)}
-                className="flex-1 py-3 rounded-xl font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
-              >
-                Close
-              </button>
-              <button 
-                onClick={() => window.print()}
-                className="flex-1 py-3 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center gap-2"
-              >
-                <Printer size={18} /> Print
-              </button>
+              <button onClick={() => setShowPrintLabel(false)} className="flex-1 py-3 rounded-xl font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700">Close</button>
+              <button onClick={() => window.print()} className="flex-1 py-3 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center gap-2"><Printer size={18} /> Print</button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Move Item Modal */}
+      
       {isMovingItem && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center bg-black/50">
           <div className="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl p-6 w-full sm:max-w-md sm:mx-auto max-h-[80vh] flex flex-col">
@@ -1102,12 +1163,8 @@ const BoxDetailPage = () => {
               <button onClick={() => setIsMovingItem(null)}><XButton /></button>
             </div>
             <div className="overflow-y-auto space-y-2 flex-1">
-              {storage.getBoxes().filter(b => b.id !== id).map(b => (
-                <button 
-                  key={b.id}
-                  onClick={() => handleMoveItem(b.id)}
-                  className="w-full text-left p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-200 dark:hover:border-indigo-800 transition-colors flex justify-between items-center"
-                >
+              {allBoxes.filter(b => b.id !== id).map(b => (
+                <button key={b.id} onClick={() => handleMoveItem(b.id)} className="w-full text-left p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-200 dark:hover:border-indigo-800 transition-colors flex justify-between items-center">
                   <span className="font-medium text-gray-900 dark:text-gray-200">{b.name}</span>
                   <ArrowRight size={16} className="text-gray-400" />
                 </button>
@@ -1178,17 +1235,11 @@ const AddItemPage = () => {
         mediaRecorderRef.current = mediaRecorder;
         audioChunksRef.current = [];
 
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunksRef.current.push(event.data);
-          }
-        };
+        mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
 
         mediaRecorder.onstop = async () => {
-          // Use the actual mime type from the recorder if available, else fallback to webm
           const mimeType = mediaRecorder.mimeType || 'audio/webm';
           const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-          
           const reader = new FileReader();
           reader.onloadend = async () => {
             const base64Audio = reader.result as string;
@@ -1201,10 +1252,8 @@ const AddItemPage = () => {
               setColor(result.color);
             } catch (err) {
               alert("Failed to analyze audio. Please try again or enter details manually.");
-              console.error(err);
             } finally {
               setIsAnalyzing(false);
-              // Stop all tracks to release microphone
               stream.getTracks().forEach(track => track.stop());
             }
           };
@@ -1220,22 +1269,17 @@ const AddItemPage = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!boxId || !name) return;
 
-    const newItem: Item = {
-      id: uuidv4(),
-      boxId,
-      name,
-      description,
-      material,
-      color,
-      // photoUrl: image || undefined, // NO LONGER SAVING IMAGE TO STORAGE
-      createdAt: Date.now()
-    };
-    storage.addItem(newItem);
-    navigate(`/box/${boxId}`);
+    try {
+      const newItemData = { boxId, name, description, material, color };
+      await storage.addItem(newItemData);
+      navigate(`/box/${boxId}`);
+    } catch (err) {
+      alert("Failed to save item. Please try again.");
+    }
   };
 
   return (
@@ -1257,14 +1301,7 @@ const AddItemPage = () => {
                 <span className="text-gray-500 dark:text-gray-400 font-medium">Tap to take photo</span>
               </>
             )}
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-              className="hidden" 
-              accept="image/*" 
-              capture="environment"
-            />
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" capture="environment" />
           </div>
 
           {isRecording && recordingStream && <AudioWaveform stream={recordingStream} />}
@@ -1277,37 +1314,17 @@ const AddItemPage = () => {
                 disabled={isAnalyzing || isRecording}
                 className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold shadow-lg flex items-center justify-center gap-2 disabled:opacity-70"
               >
-                {isAnalyzing && !isRecording ? (
-                  <>
-                    <Loader2 className="animate-spin" size={20} /> Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={20} /> Analyze Image
-                  </>
-                )}
+                {isAnalyzing && !isRecording ? ( <><Loader2 className="animate-spin" size={20} /> Analyzing...</> ) : ( <><Sparkles size={20} /> Analyze Image</> )}
               </button>
             )}
             
             <button
               type="button"
               onClick={toggleRecording}
-              disabled={isAnalyzing && !isRecording} // Disable if analyzing image
-              className={`flex-1 py-3 rounded-xl font-semibold shadow-lg flex items-center justify-center gap-2 transition-all ${
-                isRecording 
-                  ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-200 dark:ring-red-900' 
-                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-              }`}
+              disabled={isAnalyzing && !isRecording}
+              className={`flex-1 py-3 rounded-xl font-semibold shadow-lg flex items-center justify-center gap-2 transition-all ${ isRecording ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-200 dark:ring-red-900' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600' }`}
             >
-              {isRecording ? (
-                <>
-                  <Square size={20} fill="currentColor" /> Stop & Analyze
-                </>
-              ) : (
-                <>
-                  <Mic size={20} /> Voice Input
-                </>
-              )}
+              {isRecording ? ( <><Square size={20} fill="currentColor" /> Stop & Analyze</> ) : ( <><Mic size={20} /> Voice Input</> )}
             </button>
           </div>
           
@@ -1322,61 +1339,27 @@ const AddItemPage = () => {
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div>
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Item Name</label>
-            <input 
-              type="text" 
-              required
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium text-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-              placeholder="What is it?"
-            />
+            <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium text-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500" placeholder="What is it?" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
              <div>
-              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                <Hammer size={12} /> Material
-              </label>
-              <input 
-                type="text" 
-                value={material}
-                onChange={e => setMaterial(e.target.value)}
-                className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                placeholder="e.g. Plastic"
-              />
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Hammer size={12} /> Material</label>
+              <input type="text" value={material} onChange={e => setMaterial(e.target.value)} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500" placeholder="e.g. Plastic" />
             </div>
              <div>
-              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                <Palette size={12} /> Color
-              </label>
-              <input 
-                type="text" 
-                value={color}
-                onChange={e => setColor(e.target.value)}
-                className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-                placeholder="e.g. Red"
-              />
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Palette size={12} /> Color</label>
+              <input type="text" value={color} onChange={e => setColor(e.target.value)} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500" placeholder="e.g. Red" />
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Description</label>
-            <textarea 
-              rows={3}
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-              placeholder="Brief details..."
-            />
+            <textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500" placeholder="Brief details..." />
           </div>
         </div>
 
-        <button 
-          type="submit"
-          className="w-full bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-4 rounded-xl font-bold text-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors"
-        >
-          Save Item
-        </button>
+        <button type="submit" className="w-full bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 py-4 rounded-xl font-bold text-lg hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors">Save Item</button>
       </form>
     </div>
   );
@@ -1385,18 +1368,16 @@ const AddItemPage = () => {
 const EditItemPage = () => {
   const { boxId, itemId } = useParams();
   const navigate = useNavigate();
-
   const [item, setItem] = useState<Item | null>(null);
 
   useEffect(() => {
     if (itemId) {
-      const existingItem = storage.getItemById(itemId);
-      if (existingItem) {
-        setItem(existingItem);
-      } else {
-        // Item not found, navigate back to box
-        if (boxId) navigate(`/box/${boxId}`);
-      }
+      storage.getItemById(itemId)
+        .then(existingItem => {
+          if (existingItem) setItem(existingItem);
+          else if (boxId) navigate(`/box/${boxId}`);
+        })
+        .catch(() => { if (boxId) navigate(`/box/${boxId}`); });
     }
   }, [itemId, boxId, navigate]);
 
@@ -1406,85 +1387,44 @@ const EditItemPage = () => {
     setItem({ ...item, [name]: value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!boxId || !item || !item.name.trim()) return;
-
-    storage.updateItem(item);
-    navigate(`/box/${boxId}`);
+    try {
+      await storage.updateItem(item);
+      navigate(`/box/${boxId}`);
+    } catch (err) {
+      alert("Failed to update item.");
+    }
   };
 
-  if (!item) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="animate-spin text-gray-400" size={32} />
-      </div>
-    );
-  }
+  if (!item) return <PageLoader text="Loading item..." />;
 
   return (
     <div className="pb-10">
       <Header title="Edit Item" backTo={`/box/${boxId}`} />
-
       <form onSubmit={handleSubmit} className="p-4 space-y-6">
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Item Name</label>
-            <input
-              type="text"
-              name="name"
-              required
-              value={item.name}
-              onChange={handleInputChange}
-              className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium text-lg text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-            />
+            <input type="text" name="name" required value={item.name} onChange={handleInputChange} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium text-lg text-gray-900 dark:text-white" />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
              <div>
-              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                <Hammer size={12} /> Material
-              </label>
-              <input
-                type="text"
-                name="material"
-                value={item.material || ''}
-                onChange={handleInputChange}
-                className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-              />
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Hammer size={12} /> Material</label>
+              <input type="text" name="material" value={item.material || ''} onChange={handleInputChange} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white" />
             </div>
              <div>
-              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                <Palette size={12} /> Color
-              </label>
-              <input
-                type="text"
-                name="color"
-                value={item.color || ''}
-                onChange={handleInputChange}
-                className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-              />
+              <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Palette size={12} /> Color</label>
+              <input type="text" name="color" value={item.color || ''} onChange={handleInputChange} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white" />
             </div>
           </div>
-
           <div>
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Description</label>
-            <textarea
-              rows={3}
-              name="description"
-              value={item.description || ''}
-              onChange={handleInputChange}
-              className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
-            />
+            <textarea rows={3} name="description" value={item.description || ''} onChange={handleInputChange} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white" />
           </div>
         </div>
-
-        <button
-          type="submit"
-          className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/30"
-        >
-          Save Changes
-        </button>
+        <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-500/30">Save Changes</button>
       </form>
     </div>
   );
@@ -1493,21 +1433,24 @@ const EditItemPage = () => {
 const EditBoxPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-
   const [box, setBox] = useState<Box | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
 
   useEffect(() => {
-    const locs = storage.getLocations();
-    setLocations(locs);
-    if (id) {
-      const existingBox = storage.getBoxById(id);
-      if (existingBox) {
-        setBox(existingBox);
-      } else {
-        navigate('/'); // Box not found
+    const fetchData = async () => {
+      try {
+        const [locs, existingBox] = await Promise.all([
+          storage.getLocations(),
+          id ? storage.getBoxById(id) : Promise.resolve(null)
+        ]);
+        setLocations(locs);
+        if (existingBox) setBox(existingBox);
+        else if (id) navigate('/');
+      } catch (err) {
+        navigate('/');
       }
-    }
+    };
+    fetchData();
   }, [id, navigate]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -1516,21 +1459,18 @@ const EditBoxPage = () => {
     setBox({ ...box, [name]: value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || !box || !box.name.trim()) return;
-
-    storage.updateBox(box);
-    navigate(`/box/${id}`);
+    try {
+      await storage.updateBox(box);
+      navigate(`/box/${id}`);
+    } catch (err) {
+      alert("Failed to update box.");
+    }
   };
 
-  if (!box) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="animate-spin text-gray-400" size={32} />
-      </div>
-    );
-  }
+  if (!box) return <PageLoader text="Loading box..." />;
 
   return (
     <div className="pb-10">
@@ -1538,45 +1478,19 @@ const EditBoxPage = () => {
       <form onSubmit={handleSubmit} className="p-4 space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Box Name/Number</label>
-          <input 
-            type="text" 
-            name="name"
-            required
-            value={box.name}
-            onChange={handleInputChange}
-            className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900 dark:text-white"
-          />
+          <input type="text" name="name" required value={box.name} onChange={handleInputChange} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900 dark:text-white" />
         </div>
-
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location</label>
-          <select 
-            name="locationId"
-            className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900 dark:text-white"
-            value={box.locationId}
-            onChange={handleInputChange}
-          >
+          <select name="locationId" className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900 dark:text-white" value={box.locationId} onChange={handleInputChange}>
             {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
         </div>
-
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (Optional)</label>
-          <textarea 
-            rows={3}
-            name="description"
-            className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900 dark:text-white"
-            value={box.description || ''}
-            onChange={handleInputChange}
-          />
+          <textarea rows={3} name="description" className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900 dark:text-white" value={box.description || ''} onChange={handleInputChange} />
         </div>
-
-        <button 
-          type="submit"
-          className="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold text-lg shadow-lg shadow-indigo-500/30 hover:bg-indigo-700"
-        >
-          Save Changes
-        </button>
+        <button type="submit" className="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold text-lg shadow-lg shadow-indigo-500/30 hover:bg-indigo-700">Save Changes</button>
       </form>
     </div>
   );
@@ -1593,15 +1507,7 @@ const XButton = () => (
 // --- MAIN APP ---
 
 export default function App() {
-  // Initialize some default data for demo purposes if empty
-  useEffect(() => {
-    if (storage.getLocations().length === 0) {
-      const garageId = uuidv4();
-      storage.addLocation({ id: garageId, name: 'Garage' });
-      storage.addLocation({ id: uuidv4(), name: 'Attic' });
-    }
-  }, []);
-
+  // The app no longer manages initial data. This should be handled by the backend.
   return (
     <HashRouter>
       <Routes>
