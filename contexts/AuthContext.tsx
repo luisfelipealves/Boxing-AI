@@ -41,16 +41,19 @@ export const AuthProvider = ({ children }: React.PropsWithChildren) => {
 
   const signInWithGoogle = async () => {
     try {
+      const currentOrigin = window.location.origin;
+      console.log("Attempting Google Auth redirect to:", currentOrigin);
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: currentOrigin,
         },
       });
       if (error) throw error;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error logging in with Google:", error);
-      alert("Error logging in. Please check console.");
+      alert(`Login failed: ${error.message || error}\n\nIMPORTANT: Ensure "${window.location.origin}" is added to 'Redirect URLs' in your Supabase Auth settings.`);
     }
   };
 
