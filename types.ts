@@ -18,7 +18,6 @@ export interface Item {
   description?: string;
   material?: string;
   color?: string;
-  // photoUrl removed as requested - only used for temporary analysis
   createdAt: number;
 }
 
@@ -27,4 +26,11 @@ export interface AIAnalysisResult {
   description: string;
   material: string;
   color: string;
+}
+
+export interface AppData {
+  locations: Location[];
+  boxes: Box[];
+  items: Item[];
+  timestamp: number;
 }

@@ -1,130 +1,170 @@
-import { Location, Box, Item } from "../types";
+import { Location, Box, Item, AppData } from "../types";
 
-const KEYS = {
-  LOCATIONS: 'boxtrack_locations',
-  BOXES: 'boxtrack_boxes',
-  ITEMS: 'boxtrack_items',
+// In a real app, this would be configured via environment variables.
+// For this demo, we use a mock local storage approach simulated via API calls pattern
+// but falling back to localStorage if the API isn't real, or we just mock it completely here.
+// Since this is a frontend-only demo mostly, we'll wrap localStorage with Promises to simulate async API.
+
+const DELAY = 200; // simulate network latency
+
+const wait = () => new Promise(resolve => setTimeout(resolve, DELAY));
+
+const getStored = <T>(key: string): T[] => {
+  const data = localStorage.getItem(key);
+  return data ? JSON.parse(data) : [];
 };
 
-const getList = <T>(key: string): T[] => {
-  try {
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : [];
-  } catch (e) {
-    console.error("Error parsing storage", e);
-    return [];
-  }
-};
-
-const setList = <T>(key: string, list: T[]) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(list));
-  } catch (e) {
-    console.error("Error saving to storage", e);
-  }
+const setStored = <T>(key: string, data: T[]) => {
+  localStorage.setItem(key, JSON.stringify(data));
 };
 
 // Locations
-export const getLocations = (): Location[] => getList<Location>(KEYS.LOCATIONS);
-export const addLocation = (location: Location) => {
-  const list = getLocations();
-  list.push(location);
-  setList(KEYS.LOCATIONS, list);
-};
-export const deleteLocation = (locationId: string) => {
-  const list = getLocations();
-  const updated = list.filter(l => l.id !== locationId);
-  setList(KEYS.LOCATIONS, updated);
+export const getLocations = async (): Promise<Location[]> => {
+  await wait();
+  return getStored<Location>('locations');
 };
 
-// Items - Defined before Boxes/DeleteBox to ensure availability
-export const getItems = (): Item[] => getList<Item>(KEYS.ITEMS);
-export const getItemById = (itemId: string): Item | undefined => {
-  return getItems().find(item => item.id === itemId);
+export const addLocation = async (location: Omit<Location, 'id'>): Promise<Location> => {
+  await wait();
+  const locations = getStored<Location>('locations');
+  const newLoc = { ...location, id: crypto.randomUUID() };
+  locations.push(newLoc);
+  setStored('locations', locations);
+  return newLoc;
 };
-export const addItem = (item: Item) => {
-  const list = getItems();
-  list.push(item);
-  setList(KEYS.ITEMS, list);
+
+export const deleteLocation = async (locationId: string): Promise<void> => {
+  await wait();
+  const locations = getStored<Location>('locations');
+  setStored('locations', locations.filter(l => l.id !== locationId));
 };
-export const updateItem = (updatedItem: Item) => {
-  const list = getItems();
-  const updatedList = list.map(item => item.id === updatedItem.id ? updatedItem : item);
-  setList(KEYS.ITEMS, updatedList);
+
+// Items
+export const getItems = async (): Promise<Item[]> => {
+  await wait();
+  return getStored<Item>('items');
 };
-export const moveItem = (itemId: string, newBoxId: string) => {
-  const list = getItems();
-  const updated = list.map(item => item.id === itemId ? { ...item, boxId: newBoxId } : item);
-  setList(KEYS.ITEMS, updated);
+
+export const getItemById = async (itemId: string): Promise<Item | undefined> => {
+  await wait();
+  const items = getStored<Item>('items');
+  return items.find(i => i.id === itemId);
 };
-export const deleteItem = (itemId: string) => {
-  const list = getItems();
-  const updated = list.filter(item => item.id !== itemId);
-  setList(KEYS.ITEMS, updated);
+
+export const addItem = async (item: Omit<Item, 'id' | 'createdAt'>): Promise<Item> => {
+  await wait();
+  const items = getStored<Item>('items');
+  const newItem = { ...item, id: crypto.randomUUID(), createdAt: Date.now() };
+  items.push(newItem);
+  setStored('items', items);
+  return newItem;
+};
+
+export const updateItem = async (updatedItem: Item): Promise<Item> => {
+  await wait();
+  const items = getStored<Item>('items');
+  const index = items.findIndex(i => i.id === updatedItem.id);
+  if (index !== -1) {
+    items[index] = updatedItem;
+    setStored('items', items);
+  }
+  return updatedItem;
+};
+
+export const moveItem = async (itemId: string, newBoxId: string): Promise<Item> => {
+  await wait();
+  const items = getStored<Item>('items');
+  const index = items.findIndex(i => i.id === itemId);
+  if (index !== -1) {
+    items[index].boxId = newBoxId;
+    setStored('items', items);
+    return items[index];
+  }
+  throw new Error("Item not found");
+};
+
+export const deleteItem = async (itemId: string): Promise<void> => {
+  await wait();
+  const items = getStored<Item>('items');
+  setStored('items', items.filter(i => i.id !== itemId));
 };
 
 // Boxes
-export const getBoxes = (): Box[] => getList<Box>(KEYS.BOXES);
-export const addBox = (box: Box) => {
-  const list = getBoxes();
-  list.push(box);
-  setList(KEYS.BOXES, list);
+export const getBoxes = async (): Promise<Box[]> => {
+  await wait();
+  return getStored<Box>('boxes');
 };
-export const getBoxById = (id: string): Box | undefined => {
-  return getBoxes().find(b => b.id === id);
+
+export const addBox = async (box: Omit<Box, 'id'>): Promise<Box> => {
+  await wait();
+  const boxes = getStored<Box>('boxes');
+  const newBox = { ...box, id: crypto.randomUUID() };
+  boxes.push(newBox);
+  setStored('boxes', boxes);
+  return newBox;
 };
-export const updateBox = (updatedBox: Box) => {
-  const list = getBoxes();
-  const updatedList = list.map(box => box.id === updatedBox.id ? updatedBox : box);
-  setList(KEYS.BOXES, updatedList);
+
+export const getBoxById = async (id: string): Promise<Box | undefined> => {
+  await wait();
+  const boxes = getStored<Box>('boxes');
+  return boxes.find(b => b.id === id);
 };
-export const deleteBox = (boxId: string) => {
-  // 1. Delete the box
-  const boxes = getBoxes();
-  const updatedBoxes = boxes.filter(b => b.id !== boxId);
-  setList(KEYS.BOXES, updatedBoxes);
+
+export const updateBox = async (updatedBox: Box): Promise<Box> => {
+  await wait();
+  const boxes = getStored<Box>('boxes');
+  const index = boxes.findIndex(b => b.id === updatedBox.id);
+  if (index !== -1) {
+    boxes[index] = updatedBox;
+    setStored('boxes', boxes);
+  }
+  return updatedBox;
+};
+
+export const deleteBox = async (boxId: string): Promise<void> => {
+  await wait();
+  // Delete box
+  const boxes = getStored<Box>('boxes');
+  setStored('boxes', boxes.filter(b => b.id !== boxId));
   
-  // 2. Delete all items associated with this box
-  const items = getItems();
-  const updatedItems = items.filter(i => i.boxId !== boxId);
-  setList(KEYS.ITEMS, updatedItems);
+  // Cascade delete items in box
+  const items = getStored<Item>('items');
+  setStored('items', items.filter(i => i.boxId !== boxId));
 };
 
-// Data Management (Backup/Restore/Export)
-export interface AppData {
-  locations: Location[];
-  boxes: Box[];
-  items: Item[];
-  timestamp: number;
-}
-
-export const getExportData = (): AppData => {
+// Data Management
+export const getExportData = async (): Promise<AppData> => {
+  const [locations, boxes, items] = await Promise.all([
+    getLocations(),
+    getBoxes(),
+    getItems(),
+  ]);
   return {
-    locations: getLocations(),
-    boxes: getBoxes(),
-    items: getItems(),
+    locations,
+    boxes,
+    items,
     timestamp: Date.now(),
   };
 };
 
-export const importData = (data: AppData): boolean => {
+export const importData = async (data: AppData): Promise<{ success: boolean }> => {
+  await wait();
   try {
-    if (!data.locations || !data.boxes || !data.items) return false;
-    
-    setList(KEYS.LOCATIONS, data.locations);
-    setList(KEYS.BOXES, data.boxes);
-    setList(KEYS.ITEMS, data.items);
-    return true;
+    if (data.locations) setStored('locations', data.locations);
+    if (data.boxes) setStored('boxes', data.boxes);
+    if (data.items) setStored('items', data.items);
+    return { success: true };
   } catch (e) {
-    console.error("Import failed", e);
-    return false;
+    return { success: false };
   }
 };
 
-export const generateHumanReadableInventory = (): string => {
-  const locations = getLocations();
-  const boxes = getBoxes();
-  const items = getItems();
+export const generateHumanReadableInventory = async (): Promise<string> => {
+    const [locations, boxes, items] = await Promise.all([
+        getLocations(),
+        getBoxes(),
+        getItems(),
+    ]);
 
   let output = "MY INVENTORY DATA:\n\n";
 
