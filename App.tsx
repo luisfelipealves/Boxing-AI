@@ -815,7 +815,7 @@ const ChatPage = () => {
     try {
       const response = await chatSessionRef.current.sendMessage({ message: userText });
       const text = response.text;
-      setMessages(prev => [...prev, { id: uuidv4(), role: 'model', text }]);
+      setMessages(prev => [...prev, { id: uuidv4(), role: 'model', text: text || '' }]);
     } catch (error) {
       console.error(error);
       setMessages(prev => [...prev, { id: uuidv4(), role: 'model', text: "Sorry, I had trouble connecting to the AI. Please try again.", isError: true }]);
