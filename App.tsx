@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { HashRouter, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Link, useNavigate, useParams, useLocation, Navigate } from 'react-router-dom';
 import { 
   Package, 
   MapPin, 
@@ -32,7 +32,9 @@ import {
   Share2,
   Check,
   FilePenLine,
-  RefreshCw
+  RefreshCw,
+  LogOut,
+  User
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { v4 as uuidv4 } from 'uuid';
@@ -42,6 +44,8 @@ import { Location, Box, Item } from './types';
 import * as storage from './services/storageService';
 import { analyzeItemImage, analyzeItemAudio, createInventoryChat } from './services/geminiService';
 import { QRScanner } from './components/QRScanner';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LoginPage } from './components/LoginPage';
 
 // --- UI COMPONENTS ---
 
@@ -237,6 +241,7 @@ const ConfirmDialog = ({
 // --- PAGES ---
 
 const SettingsPage = () => {
+  const { user, signOut } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
   const [copied, setCopied] = useState(false);
@@ -311,6 +316,26 @@ const SettingsPage = () => {
       <Header title="Settings & Data" backTo="/" />
       
       <div className="p-4 space-y-6">
+
+        {/* User Info Section */}
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-800">
+           <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <User size={24} />
+            </div>
+            <div className="overflow-hidden">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white truncate">{user?.email}</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Logged in via Google</p>
+            </div>
+          </div>
+          <button 
+            onClick={signOut}
+            className="w-full py-3 px-4 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors border border-red-100 dark:border-red-900/50"
+          >
+            <LogOut size={18} /> Sign Out
+          </button>
+        </div>
+
         {/* Gemini Integration Section */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-800">
           <div className="flex items-center gap-3 mb-4">
@@ -1503,25 +1528,50 @@ const XButton = () => (
   </div>
 );
 
+// --- PROTECTED ROUTE WRAPPER ---
+const ProtectedRoute = ({ children }: React.PropsWithChildren) => {
+  const { session, loading } = useAuth();
+
+  if (loading) {
+    return <PageLoader />;
+  }
+
+  if (!session) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+const AuthenticatedLayout = ({ children }: React.PropsWithChildren) => (
+  <ProtectedRoute>
+    {children}
+    <Navigation />
+  </ProtectedRoute>
+);
 
 // --- MAIN APP ---
 
 export default function App() {
-  // The app no longer manages initial data. This should be handled by the backend.
   return (
-    <HashRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/locations" element={<LocationsPage />} />
-        <Route path="/chat" element={<ChatPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/box/new" element={<BoxFormPage />} />
-        <Route path="/box/:id" element={<BoxDetailPage />} />
-        <Route path="/box/:id/edit" element={<EditBoxPage />} />
-        <Route path="/box/:boxId/add-item" element={<AddItemPage />} />
-        <Route path="/box/:boxId/edit-item/:itemId" element={<EditItemPage />} />
-      </Routes>
-      <Navigation />
-    </HashRouter>
+    <AuthProvider>
+      <HashRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          
+          <Route path="/" element={<AuthenticatedLayout><HomePage /></AuthenticatedLayout>} />
+          <Route path="/locations" element={<AuthenticatedLayout><LocationsPage /></AuthenticatedLayout>} />
+          <Route path="/chat" element={<AuthenticatedLayout><ChatPage /></AuthenticatedLayout>} />
+          <Route path="/settings" element={<AuthenticatedLayout><SettingsPage /></AuthenticatedLayout>} />
+          
+          <Route path="/box/new" element={<AuthenticatedLayout><BoxFormPage /></AuthenticatedLayout>} />
+          <Route path="/box/:id" element={<AuthenticatedLayout><BoxDetailPage /></AuthenticatedLayout>} />
+          <Route path="/box/:id/edit" element={<AuthenticatedLayout><EditBoxPage /></AuthenticatedLayout>} />
+          
+          <Route path="/box/:boxId/add-item" element={<AuthenticatedLayout><AddItemPage /></AuthenticatedLayout>} />
+          <Route path="/box/:boxId/edit-item/:itemId" element={<AuthenticatedLayout><EditItemPage /></AuthenticatedLayout>} />
+        </Routes>
+      </HashRouter>
+    </AuthProvider>
   );
 }
