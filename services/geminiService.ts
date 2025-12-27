@@ -40,7 +40,7 @@ export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisR
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-1.5-flash",
       contents: {
         parts: [
           fileToGenerativePart(base64Data, mimeType),
@@ -78,7 +78,7 @@ export const analyzeItemAudio = async (base64Audio: string): Promise<AIAnalysisR
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-1.5-flash",
       contents: {
         parts: [
           fileToGenerativePart(base64Data, mimeType), 
@@ -106,7 +106,7 @@ export const createInventoryChat = (inventoryContext: string): Chat => {
   const ai = getAiClient();
   
   return ai.chats.create({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-1.5-flash',
     config: {
       systemInstruction: `You are BoxTrack Assistant, a helpful and friendly AI for home inventory management. 
       
