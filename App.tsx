@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useNavigate, useParams, useLocation, Navigate } from 'react-router-dom';
-import { 
-  Package, 
-  MapPin, 
-  Plus, 
-  Search, 
-  QrCode, 
-  Camera, 
-  ArrowRight, 
-  Printer, 
-  Move, 
+import {
+  Package,
+  MapPin,
+  Plus,
+  Search,
+  QrCode,
+  Camera,
+  ArrowRight,
+  Printer,
+  Move,
   Trash2,
   Sparkles,
   ChevronLeft,
@@ -59,19 +59,19 @@ const PageLoader = ({ text = "Loading..." }: { text?: string }) => (
 const ErrorDisplay = ({ message, onRetry }: { message: string; onRetry?: () => void; }) => (
   <div className="flex flex-col items-center justify-center h-[calc(100vh-150px)] bg-gray-50 dark:bg-gray-950 p-4">
     <div className="text-center">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 mx-auto">
-            <AlertTriangle size={32} />
-        </div>
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Oops! Something went wrong.</h2>
-        <p className="text-gray-600 dark:text-gray-300 mb-6">{message}</p>
-        {onRetry && (
-            <button
-                onClick={onRetry}
-                className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 mx-auto"
-            >
-                <RefreshCw size={16} /> Try Again
-            </button>
-        )}
+      <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 mx-auto">
+        <AlertTriangle size={32} />
+      </div>
+      <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Oops! Something went wrong.</h2>
+      <p className="text-gray-600 dark:text-gray-300 mb-6">{message}</p>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 mx-auto"
+        >
+          <RefreshCw size={16} /> Try Again
+        </button>
+      )}
     </div>
   </div>
 );
@@ -87,10 +87,10 @@ const AudioWaveform = ({ stream }: { stream: MediaStream }) => {
     const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const analyser = audioCtx.createAnalyser();
     const source = audioCtx.createMediaStreamSource(stream);
-    
+
     source.connect(analyser);
     analyser.fftSize = 2048;
-    
+
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
     const canvas = canvasRef.current;
@@ -142,10 +142,10 @@ const AudioWaveform = ({ stream }: { stream: MediaStream }) => {
 
   return (
     <div className="w-full h-16 bg-red-50 dark:bg-red-900/10 rounded-xl overflow-hidden border border-red-100 dark:border-red-900/30 mb-3 flex items-center justify-center">
-      <canvas 
-        ref={canvasRef} 
-        width={600} 
-        height={100} 
+      <canvas
+        ref={canvasRef}
+        width={600}
+        height={100}
         className="w-full h-full"
       />
     </div>
@@ -154,7 +154,7 @@ const AudioWaveform = ({ stream }: { stream: MediaStream }) => {
 
 const Navigation = () => {
   const location = useLocation();
-  
+
   const isActive = (path: string) => location.pathname === path ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400";
 
   return (
@@ -191,14 +191,14 @@ const Header: React.FC<{ title: string; backTo?: string; action?: React.ReactNod
   );
 };
 
-const ConfirmDialog = ({ 
-  isOpen, 
-  title, 
-  message, 
-  onConfirm, 
-  onCancel, 
-  confirmText = "Delete", 
-  isDestructive = false 
+const ConfirmDialog = ({
+  isOpen,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmText = "Delete",
+  isDestructive = false
 }: {
   isOpen: boolean;
   title: string;
@@ -220,13 +220,13 @@ const ConfirmDialog = ({
           <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">{message}</p>
         </div>
         <div className="flex bg-gray-50 dark:bg-gray-800 p-4 gap-3">
-          <button 
+          <button
             onClick={onCancel}
             className="flex-1 py-3 rounded-xl font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
           >
             Cancel
           </button>
-          <button 
+          <button
             onClick={onConfirm}
             className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg transition-all ${isDestructive ? 'bg-red-600 hover:bg-red-700 shadow-red-500/30' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/30'}`}
           >
@@ -243,7 +243,7 @@ const ConfirmDialog = ({
 const SettingsPage = () => {
   const { user, signOut } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [importStatus, setImportStatus] = useState<{type: 'success' | 'error', msg: string} | null>(null);
+  const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error', msg: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
   const handleExport = async () => {
@@ -287,17 +287,17 @@ const SettingsPage = () => {
 
   const handleShareToGemini = async () => {
     try {
-        const inventoryText = await storage.generateHumanReadableInventory();
-        const prompt = `You are my Inventory Assistant. Here is my current home inventory data. Please memorize it so I can ask you questions about where my things are.\n\n${inventoryText}\n\n[End of Data]\n\nI am ready to ask questions now.`;
-        
-        if (navigator.share) {
-            await navigator.share({
-              title: 'BoxTrack Inventory',
-              text: prompt,
-            });
-        } else {
-          copyToClipboard(prompt);
-        }
+      const inventoryText = await storage.generateHumanReadableInventory();
+      const prompt = `You are my Inventory Assistant. Here is my current home inventory data. Please memorize it so I can ask you questions about where my things are.\n\n${inventoryText}\n\n[End of Data]\n\nI am ready to ask questions now.`;
+
+      if (navigator.share) {
+        await navigator.share({
+          title: 'BoxTrack Inventory',
+          text: prompt,
+        });
+      } else {
+        copyToClipboard(prompt);
+      }
     } catch (err) {
       alert("Could not generate inventory context. Please try again.");
       copyToClipboard("Failed to generate prompt. Please copy your inventory manually.");
@@ -314,12 +314,12 @@ const SettingsPage = () => {
   return (
     <div className="pb-24 bg-gray-50 dark:bg-gray-950 min-h-screen">
       <Header title="Settings & Data" backTo="/" />
-      
+
       <div className="p-4 space-y-6">
 
         {/* User Info Section */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-800">
-           <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-4 mb-4">
             <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400">
               <User size={24} />
             </div>
@@ -328,7 +328,7 @@ const SettingsPage = () => {
               <p className="text-xs text-gray-500 dark:text-gray-400">Logged in via Google</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={signOut}
             className="w-full py-3 px-4 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors border border-red-100 dark:border-red-900/50"
           >
@@ -347,12 +347,12 @@ const SettingsPage = () => {
               <p className="text-xs text-gray-500 dark:text-gray-400">Integrate with the Android App</p>
             </div>
           </div>
-          
+
           <p className="text-sm text-gray-600 dark:text-gray-300 mb-4 leading-relaxed">
             Want to ask the official Google Gemini app about your boxes? Use this to generate a "Context Prompt" containing all your items, then share it to Gemini.
           </p>
 
-          <button 
+          <button
             onClick={handleShareToGemini}
             className="w-full py-3 px-4 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors border border-indigo-100 dark:border-indigo-900/50"
           >
@@ -377,11 +377,11 @@ const SettingsPage = () => {
           </div>
 
           <div className="space-y-3">
-             <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 bg-green-50 dark:bg-green-900/10 p-3 rounded-lg border border-green-100 dark:border-green-900/30 text-center">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 bg-green-50 dark:bg-green-900/10 p-3 rounded-lg border border-green-100 dark:border-green-900/30 text-center">
               Your data is now stored on a secure backend.
             </p>
 
-            <button 
+            <button
               onClick={handleExport}
               className="w-full py-3 px-4 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-xl font-medium border border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
@@ -389,14 +389,14 @@ const SettingsPage = () => {
             </button>
 
             <div className="relative">
-              <button 
+              <button
                 onClick={() => fileInputRef.current?.click()}
                 className="w-full py-3 px-4 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-xl font-medium border border-gray-200 dark:border-gray-700 flex items-center justify-center gap-2 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 <Upload size={18} /> Restore Backup
               </button>
-              <input 
-                type="file" 
+              <input
+                type="file"
                 ref={fileInputRef}
                 onChange={handleImport}
                 accept=".json"
@@ -422,7 +422,7 @@ const HomePage = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [filterMaterial, setFilterMaterial] = useState('');
   const [filterColor, setFilterColor] = useState('');
-  
+
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [items, setItems] = useState<Item[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -467,7 +467,7 @@ const HomePage = () => {
     const boxItems = items.filter(i => i.boxId === box.id);
     const term = search.toLowerCase();
     const boxNameMatch = box.name.toLowerCase().includes(term);
-    const itemsTextMatch = boxItems.some(item => 
+    const itemsTextMatch = boxItems.some(item =>
       item.name.toLowerCase().includes(term) ||
       (item.description && item.description.toLowerCase().includes(term)) ||
       (item.material && item.material.toLowerCase().includes(term)) ||
@@ -491,7 +491,7 @@ const HomePage = () => {
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
-            <input 
+            <input
               type="text"
               placeholder="Search items..."
               className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm shadow-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
@@ -499,7 +499,7 @@ const HomePage = () => {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          <button 
+          <button
             onClick={() => setShowFilters(!showFilters)}
             className={`p-3 rounded-xl shadow-sm border transition-colors relative ${showFilters || activeFiltersCount > 0 ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400' : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'}`}
           >
@@ -510,7 +510,7 @@ const HomePage = () => {
               </span>
             )}
           </button>
-          <button 
+          <button
             onClick={() => setShowScanner(true)}
             className="bg-indigo-600 text-white p-3 rounded-xl shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 transition-colors"
           >
@@ -524,7 +524,7 @@ const HomePage = () => {
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Filters</h3>
               {(filterMaterial || filterColor) && (
-                <button 
+                <button
                   onClick={() => { setFilterMaterial(''); setFilterColor(''); }}
                   className="text-xs text-indigo-600 dark:text-indigo-400 font-medium"
                 >
@@ -535,7 +535,7 @@ const HomePage = () => {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Material</label>
-                <select 
+                <select
                   className="w-full p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 dark:text-white"
                   value={filterMaterial}
                   onChange={e => setFilterMaterial(e.target.value)}
@@ -546,7 +546,7 @@ const HomePage = () => {
               </div>
               <div>
                 <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Color</label>
-                <select 
+                <select
                   className="w-full p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-gray-900 dark:text-white"
                   value={filterColor}
                   onChange={e => setFilterColor(e.target.value)}
@@ -575,14 +575,14 @@ const HomePage = () => {
         <div className="mt-6">
           <h2 className="text-gray-900 dark:text-white font-semibold mb-3 flex items-center justify-between">
             <span>Your Boxes</span>
-            <Link 
-              to="/box/new" 
+            <Link
+              to="/box/new"
               className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-1 shadow-md hover:bg-indigo-700 transition-colors"
             >
               <Plus size={18} /> New Box
             </Link>
           </h2>
-          
+
           {filteredBoxes.length === 0 ? (
             <div className="text-center py-10 text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
               <Package className="mx-auto mb-2 opacity-50" size={48} />
@@ -594,7 +594,7 @@ const HomePage = () => {
               {filteredBoxes.map(box => {
                 const location = locations.find(l => l.id === box.locationId);
                 const itemCount = items.filter(i => i.boxId === box.id).length;
-                
+
                 return (
                   <Link key={box.id} to={`/box/${box.id}`} className="block bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start">
@@ -622,8 +622,8 @@ const HomePage = () => {
   return (
     <div className="pb-24">
       {showScanner && <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} />}
-      <Header 
-        title="BoxTrack AI" 
+      <Header
+        title="BoxTrack AI"
         action={
           <Link to="/settings" className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
             <Settings size={22} />
@@ -709,7 +709,7 @@ const LocationsPage = () => {
           <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm mb-4 animate-in fade-in slide-in-from-top-2">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Add New Location</h3>
             <div className="flex gap-2">
-              <input 
+              <input
                 autoFocus
                 type="text"
                 placeholder="e.g., Garage, Attic, Basement"
@@ -731,7 +731,7 @@ const LocationsPage = () => {
                 </div>
                 <span className="font-medium text-gray-900 dark:text-white">{loc.name}</span>
               </div>
-              <button 
+              <button
                 onClick={() => setLocationToDelete(loc)}
                 className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                 aria-label="Delete location"
@@ -749,11 +749,11 @@ const LocationsPage = () => {
       </div>
     );
   };
-  
+
   return (
     <div className="pb-24">
-      <Header 
-        title="Locations" 
+      <Header
+        title="Locations"
         action={
           <button onClick={() => setIsAdding(true)} className="text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 p-2 rounded-lg">
             <Plus size={24} />
@@ -834,7 +834,7 @@ const ChatPage = () => {
     const userText = input.trim();
     setInput('');
     setIsLoading(true);
-    
+
     setMessages(prev => [...prev, { id: uuidv4(), role: 'user', text: userText }]);
 
     try {
@@ -852,21 +852,20 @@ const ChatPage = () => {
   return (
     <div className="pb-24 flex flex-col h-screen bg-gray-50 dark:bg-gray-950">
       <Header title="Assistant" />
-      
+
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg) => (
-          <div 
-            key={msg.id} 
+          <div
+            key={msg.id}
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
-            <div 
-              className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                msg.role === 'user' 
-                  ? 'bg-indigo-600 text-white rounded-br-none' 
-                  : msg.isError 
+            <div
+              className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm ${msg.role === 'user'
+                  ? 'bg-indigo-600 text-white rounded-br-none'
+                  : msg.isError
                     ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-bl-none'
                     : 'bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-bl-none'
-              }`}
+                }`}
             >
               {msg.role === 'model' && !msg.isError && (
                 <div className="flex items-center gap-1 mb-1 text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-wide">
@@ -879,13 +878,13 @@ const ChatPage = () => {
         ))}
         {(isLoading || isInitializing) && (
           <div className="flex justify-start">
-             <div className="bg-white dark:bg-gray-800 rounded-2xl rounded-bl-none px-4 py-3 border border-gray-200 dark:border-gray-700 shadow-sm">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                </div>
-             </div>
+            <div className="bg-white dark:bg-gray-800 rounded-2xl rounded-bl-none px-4 py-3 border border-gray-200 dark:border-gray-700 shadow-sm">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+              </div>
+            </div>
           </div>
         )}
         <div ref={messagesEndRef} />
@@ -901,8 +900,8 @@ const ChatPage = () => {
             className="flex-1 px-4 py-3 bg-gray-100 dark:bg-gray-800 border-0 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900 dark:text-white placeholder-gray-500"
             disabled={isLoading || isInitializing}
           />
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={!input.trim() || isLoading || isInitializing}
             className="bg-indigo-600 text-white p-3 rounded-xl shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 disabled:opacity-50 disabled:shadow-none transition-all"
           >
@@ -959,8 +958,8 @@ const BoxFormPage = () => {
       <form onSubmit={handleSubmit} className="p-4 space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Box Name/Number</label>
-          <input 
-            type="text" 
+          <input
+            type="text"
             required
             placeholder="e.g., Box #42 - Winter Clothes"
             className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
@@ -976,7 +975,7 @@ const BoxFormPage = () => {
               Please create a location first. <Link to="/locations" className="underline font-bold">Go to Locations</Link>
             </div>
           ) : (
-            <select 
+            <select
               className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900 dark:text-white"
               value={locationId}
               onChange={e => setLocationId(e.target.value)}
@@ -988,7 +987,7 @@ const BoxFormPage = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description (Optional)</label>
-          <textarea 
+          <textarea
             rows={3}
             className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
             value={description}
@@ -996,7 +995,7 @@ const BoxFormPage = () => {
           />
         </div>
 
-        <button 
+        <button
           type="submit"
           disabled={locations.length === 0}
           className="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold text-lg shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1015,7 +1014,7 @@ const BoxDetailPage = () => {
   const [locationName, setLocationName] = useState('');
   const [items, setItems] = useState<Item[]>([]);
   const [allBoxes, setAllBoxes] = useState<Box[]>([]);
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -1035,7 +1034,7 @@ const BoxDetailPage = () => {
         storage.getItems(),
         storage.getBoxes()
       ]);
-      
+
       if (b) {
         setBox(b);
         const loc = allLocs.find(l => l.id === b.locationId);
@@ -1051,7 +1050,7 @@ const BoxDetailPage = () => {
       setIsLoading(false);
     }
   };
-  
+
   useEffect(() => {
     fetchData();
   }, [id]);
@@ -1145,9 +1144,9 @@ const BoxDetailPage = () => {
 
   return (
     <div className="pb-24 relative">
-      <Header 
+      <Header
         title={box?.name || "..."}
-        backTo="/" 
+        backTo="/"
         action={
           <>
             <Link to={`/box/${id}/edit`} className="text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded-full transition-colors" title="Edit Box"><FilePenLine size={24} /></Link>
@@ -1160,7 +1159,7 @@ const BoxDetailPage = () => {
 
       <ConfirmDialog isOpen={showDeleteBoxConfirm} title="Delete Box" message={`Are you sure you want to delete "${box?.name}"? This will also permanently delete all ${items.length} items inside it.`} onConfirm={handleConfirmDeleteBox} onCancel={() => setShowDeleteBoxConfirm(false)} isDestructive={true} />
       <ConfirmDialog isOpen={!!itemToDelete} title="Delete Item" message="Are you sure you want to delete this item?" onConfirm={handleConfirmDeleteItem} onCancel={() => setItemToDelete(null)} isDestructive={true} />
-      
+
       {showPrintLabel && box && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
           <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl max-w-sm w-full text-center shadow-2xl">
@@ -1179,7 +1178,7 @@ const BoxDetailPage = () => {
           </div>
         </div>
       )}
-      
+
       {isMovingItem && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center bg-black/50">
           <div className="bg-white dark:bg-gray-900 rounded-t-2xl sm:rounded-2xl p-6 w-full sm:max-w-md sm:mx-auto max-h-[80vh] flex flex-col">
@@ -1208,7 +1207,7 @@ const AddItemPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  
+
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -1239,7 +1238,8 @@ const AddItemPage = () => {
       setMaterial(result.material);
       setColor(result.color);
     } catch (err) {
-      alert("Failed to analyze image. Please try again or enter details manually.");
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      alert(`Failed to analyze image: ${errorMessage}`);
       console.error(err);
     } finally {
       setIsAnalyzing(false);
@@ -1255,7 +1255,7 @@ const AddItemPage = () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         setRecordingStream(stream);
-        
+
         const mediaRecorder = new MediaRecorder(stream);
         mediaRecorderRef.current = mediaRecorder;
         audioChunksRef.current = [];
@@ -1276,7 +1276,8 @@ const AddItemPage = () => {
               setMaterial(result.material);
               setColor(result.color);
             } catch (err) {
-              alert("Failed to analyze audio. Please try again or enter details manually.");
+              const errorMessage = err instanceof Error ? err.message : String(err);
+              alert(`Failed to analyze audio: ${errorMessage}`);
             } finally {
               setIsAnalyzing(false);
               stream.getTracks().forEach(track => track.stop());
@@ -1310,11 +1311,11 @@ const AddItemPage = () => {
   return (
     <div className="pb-10">
       <Header title="Add Item" backTo={`/box/${boxId}`} />
-      
+
       <form onSubmit={handleSubmit} className="p-4 space-y-6">
         {/* Image & Voice Section */}
         <div className="space-y-3">
-          <div 
+          <div
             onClick={() => fileInputRef.current?.click()}
             className={`w-full h-64 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer overflow-hidden relative transition-all ${image ? 'border-indigo-500 bg-gray-900' : 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
           >
@@ -1339,24 +1340,24 @@ const AddItemPage = () => {
                 disabled={isAnalyzing || isRecording}
                 className="flex-1 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold shadow-lg flex items-center justify-center gap-2 disabled:opacity-70"
               >
-                {isAnalyzing && !isRecording ? ( <><Loader2 className="animate-spin" size={20} /> Analyzing...</> ) : ( <><Sparkles size={20} /> Analyze Image</> )}
+                {isAnalyzing && !isRecording ? (<><Loader2 className="animate-spin" size={20} /> Analyzing...</>) : (<><Sparkles size={20} /> Analyze Image</>)}
               </button>
             )}
-            
+
             <button
               type="button"
               onClick={toggleRecording}
               disabled={isAnalyzing && !isRecording}
-              className={`flex-1 py-3 rounded-xl font-semibold shadow-lg flex items-center justify-center gap-2 transition-all ${ isRecording ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-200 dark:ring-red-900' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600' }`}
+              className={`flex-1 py-3 rounded-xl font-semibold shadow-lg flex items-center justify-center gap-2 transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-200 dark:ring-red-900' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'}`}
             >
-              {isRecording ? ( <><Square size={20} fill="currentColor" /> Stop & Analyze</> ) : ( <><Mic size={20} /> Voice Input</> )}
+              {isRecording ? (<><Square size={20} fill="currentColor" /> Stop & Analyze</>) : (<><Mic size={20} /> Voice Input</>)}
             </button>
           </div>
-          
+
           {isAnalyzing && isRecording === false && !image && (
-             <div className="text-center text-sm text-indigo-600 dark:text-indigo-400 flex items-center justify-center gap-2 py-2">
-                <Loader2 className="animate-spin" size={16} /> Processing audio...
-             </div>
+            <div className="text-center text-sm text-indigo-600 dark:text-indigo-400 flex items-center justify-center gap-2 py-2">
+              <Loader2 className="animate-spin" size={16} /> Processing audio...
+            </div>
           )}
         </div>
 
@@ -1368,11 +1369,11 @@ const AddItemPage = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-             <div>
+            <div>
               <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Hammer size={12} /> Material</label>
               <input type="text" value={material} onChange={e => setMaterial(e.target.value)} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500" placeholder="e.g. Plastic" />
             </div>
-             <div>
+            <div>
               <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Palette size={12} /> Color</label>
               <input type="text" value={color} onChange={e => setColor(e.target.value)} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500" placeholder="e.g. Red" />
             </div>
@@ -1435,11 +1436,11 @@ const EditItemPage = () => {
             <input type="text" name="name" required value={item.name} onChange={handleInputChange} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-medium text-lg text-gray-900 dark:text-white" />
           </div>
           <div className="grid grid-cols-2 gap-4">
-             <div>
+            <div>
               <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Hammer size={12} /> Material</label>
               <input type="text" name="material" value={item.material || ''} onChange={handleInputChange} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white" />
             </div>
-             <div>
+            <div>
               <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Palette size={12} /> Color</label>
               <input type="text" name="color" value={item.color || ''} onChange={handleInputChange} className="w-full px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-sm text-gray-900 dark:text-white" />
             </div>
@@ -1558,16 +1559,16 @@ export default function App() {
       <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          
+
           <Route path="/" element={<AuthenticatedLayout><HomePage /></AuthenticatedLayout>} />
           <Route path="/locations" element={<AuthenticatedLayout><LocationsPage /></AuthenticatedLayout>} />
           <Route path="/chat" element={<AuthenticatedLayout><ChatPage /></AuthenticatedLayout>} />
           <Route path="/settings" element={<AuthenticatedLayout><SettingsPage /></AuthenticatedLayout>} />
-          
+
           <Route path="/box/new" element={<AuthenticatedLayout><BoxFormPage /></AuthenticatedLayout>} />
           <Route path="/box/:id" element={<AuthenticatedLayout><BoxDetailPage /></AuthenticatedLayout>} />
           <Route path="/box/:id/edit" element={<AuthenticatedLayout><EditBoxPage /></AuthenticatedLayout>} />
-          
+
           <Route path="/box/:boxId/add-item" element={<AuthenticatedLayout><AddItemPage /></AuthenticatedLayout>} />
           <Route path="/box/:boxId/edit-item/:itemId" element={<AuthenticatedLayout><EditItemPage /></AuthenticatedLayout>} />
         </Routes>
