@@ -1,15 +1,24 @@
 import { Location, Box, Item, AppData } from "../types";
 import { supabase } from "./supabaseClient";
 
+// Helper to get current user ID
+const getCurrentUserId = async (): Promise<string> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("User not authenticated");
+  return user.id;
+};
+
 // Helpers to map Database (snake_case) to App (camelCase)
 const mapLocation = (row: any): Location => ({
   id: row.id,
+  user_id: row.user_id,
   name: row.name,
   description: row.description,
 });
 
 const mapBox = (row: any): Box => ({
   id: row.id,
+  user_id: row.user_id,
   locationId: row.location_id,
   name: row.name,
   description: row.description,
@@ -17,6 +26,7 @@ const mapBox = (row: any): Box => ({
 
 const mapItem = (row: any): Item => ({
   id: row.id,
+  user_id: row.user_id,
   boxId: row.box_id,
   name: row.name,
   description: row.description,
@@ -28,6 +38,7 @@ const mapItem = (row: any): Item => ({
 // --- LOCATIONS ---
 
 export const getLocations = async (): Promise<Location[]> => {
+  // RLS on the server will automatically filter this, but explicit filtering is safe
   const { data, error } = await supabase
     .from('locations')
     .select('*')
@@ -38,9 +49,15 @@ export const getLocations = async (): Promise<Location[]> => {
 };
 
 export const addLocation = async (location: Omit<Location, 'id'>): Promise<Location> => {
+  const userId = await getCurrentUserId();
+  
   const { data, error } = await supabase
     .from('locations')
-    .insert({ name: location.name, description: location.description })
+    .insert({ 
+      name: location.name, 
+      description: location.description,
+      user_id: userId 
+    })
     .select()
     .single();
 
@@ -81,12 +98,15 @@ export const getBoxById = async (id: string): Promise<Box | undefined> => {
 };
 
 export const addBox = async (box: Omit<Box, 'id'>): Promise<Box> => {
+  const userId = await getCurrentUserId();
+
   const { data, error } = await supabase
     .from('boxes')
     .insert({
       name: box.name,
       description: box.description,
-      location_id: box.locationId // Mapping to DB column
+      location_id: box.locationId, // Mapping to DB column
+      user_id: userId
     })
     .select()
     .single();
@@ -112,8 +132,6 @@ export const updateBox = async (updatedBox: Box): Promise<Box> => {
 };
 
 export const deleteBox = async (boxId: string): Promise<void> => {
-  // Cascading delete is handled by Supabase Foreign Key if configured, 
-  // but we call delete on the box directly.
   const { error } = await supabase
     .from('boxes')
     .delete()
@@ -146,6 +164,8 @@ export const getItemById = async (itemId: string): Promise<Item | undefined> => 
 };
 
 export const addItem = async (item: Omit<Item, 'id' | 'createdAt'>): Promise<Item> => {
+  const userId = await getCurrentUserId();
+
   const { data, error } = await supabase
     .from('items')
     .insert({
@@ -153,7 +173,8 @@ export const addItem = async (item: Omit<Item, 'id' | 'createdAt'>): Promise<Ite
       name: item.name,
       description: item.description,
       material: item.material,
-      color: item.color
+      color: item.color,
+      user_id: userId
     })
     .select()
     .single();
@@ -170,7 +191,6 @@ export const updateItem = async (updatedItem: Item): Promise<Item> => {
       description: updatedItem.description,
       material: updatedItem.material,
       color: updatedItem.color,
-      // box_id usually doesn't change on simple edit, but we can include it
     })
     .eq('id', updatedItem.id)
     .select()
@@ -202,8 +222,6 @@ export const deleteItem = async (itemId: string): Promise<void> => {
 };
 
 // --- DATA MANAGEMENT (Backup/Restore) ---
-// Note: Direct JSON import/export is harder with relational DBs than localStorage.
-// We will implement a simplified version that just dumps current state.
 
 export const getExportData = async (): Promise<AppData> => {
   const [locations, boxes, items] = await Promise.all([
@@ -220,9 +238,6 @@ export const getExportData = async (): Promise<AppData> => {
 };
 
 export const importData = async (data: AppData): Promise<{ success: boolean }> => {
-  // This is a complex operation in a relational DB. 
-  // For safety, we will NOT implement a full wipe-and-replace here to avoid accidental data loss on a server.
-  // In a real app, this requires transaction logic.
   console.warn("Bulk import is disabled for Supabase version to prevent data conflicts.");
   return { success: false };
 };
