@@ -2,7 +2,8 @@ import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { AIAnalysisResult } from "../types";
 
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
+  // Use import.meta.env for Vite
+  const apiKey = import.meta.env.API_KEY || process.env.API_KEY;
   if (!apiKey) {
     console.error("API_KEY is missing");
     throw new Error("API Key is missing. Please set the API_KEY environment variable.");
@@ -32,7 +33,7 @@ const RESPONSE_SCHEMA = {
 
 export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisResult> => {
   const ai = getAiClient();
-  
+
   const base64Data = base64Image.split(',')[1];
   const mimeType = base64Image.substring(base64Image.indexOf(':') + 1, base64Image.indexOf(';'));
 
@@ -68,7 +69,7 @@ export const analyzeItemAudio = async (base64Audio: string): Promise<AIAnalysisR
   const ai = getAiClient();
 
   const base64Data = base64Audio.split(',')[1];
-  let mimeType = 'audio/mp3'; 
+  let mimeType = 'audio/mp3';
   const mimeMatch = base64Audio.match(/data:([^;]+)/);
   if (mimeMatch && mimeMatch[1]) {
     mimeType = mimeMatch[1];
@@ -81,7 +82,7 @@ export const analyzeItemAudio = async (base64Audio: string): Promise<AIAnalysisR
       model: "gemini-1.5-flash",
       contents: {
         parts: [
-          fileToGenerativePart(base64Data, mimeType), 
+          fileToGenerativePart(base64Data, mimeType),
           { text: prompt }
         ]
       },
@@ -104,7 +105,7 @@ export const analyzeItemAudio = async (base64Audio: string): Promise<AIAnalysisR
 
 export const createInventoryChat = (inventoryContext: string): Chat => {
   const ai = getAiClient();
-  
+
   return ai.chats.create({
     model: 'gemini-1.5-flash',
     config: {
