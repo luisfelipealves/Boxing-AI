@@ -1,6 +1,6 @@
 {
-  "short_name": "BoxTrack",
-  "name": "BoxTrack AI Inventory",
+  "short_name": "BoxWise",
+  "name": "BoxWise Inventory",
   "icons": [
     {
       "src": "https://cdn-icons-png.flaticon.com/512/679/679720.png",
@@ -15,7 +15,7 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#4f46e5",
+  "theme_color": "#6366f1",
   "background_color": "#ffffff",
   "orientation": "portrait"
 }

@@ -1,6 +1,17 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+
+// Script para forçar a remoção de Service Workers antigos que bloqueiam a atualização
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister();
+      console.log('SW desinstalado para forçar atualização V5');
+    }
+  });
+}
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -13,16 +24,3 @@ root.render(
     <App />
   </React.StrictMode>
 );
-
-// Register Service Worker for PWA
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(registration => {
-        console.log('SW registered: ', registration);
-      })
-      .catch(registrationError => {
-        console.log('SW registration failed: ', registrationError);
-      });
-  });
-}
