@@ -1,24 +1,42 @@
+const CACHE_NAME = 'boxtrack-v1';
+const urlsToCache = [
+  '/',
+  '/index.html',
+  '/manifest.json'
+];
 
-// Service Worker V5.0.0 - FORCE DESTROY OLD CACHE
-self.addEventListener('install', (event) => {
-    self.skipWaiting();
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => {
+        return cache.addAll(urlsToCache);
+      })
+  );
 });
 
-self.addEventListener('activate', (event) => {
-    event.waitUntil(
-        caches.keys().then((cacheNames) => {
-            return Promise.all(
-                cacheNames.map((cacheName) => {
-                    console.log('SW: Removendo cache antigo:', cacheName);
-                    return caches.delete(cacheName);
-                })
-            );
-        }).then(() => self.clients.claim())
-    );
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => {
+        if (response) {
+          return response;
+        }
+        return fetch(event.request);
+      })
+  );
 });
 
-// Interceptor para garantir que não estamos servindo nada do cache
-self.addEventListener('fetch', (event) => {
-    // Não faz cache de nada, sempre busca na rede para garantir versão nova
-    return;
+self.addEventListener('activate', event => {
+  const cacheWhitelist = [CACHE_NAME];
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
 });

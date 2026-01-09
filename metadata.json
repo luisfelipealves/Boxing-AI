@@ -1,5 +1,8 @@
 {
-  "name": "BoxWise Inventory",
-  "description": "Organize your storage boxes and manage inventory with QR codes.",
-  "requestFramePermissions": []
+  "name": "BoxWise AI",
+  "description": "Organize your storage boxes, track items with AI analysis, and manage inventory with QR codes.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
 }

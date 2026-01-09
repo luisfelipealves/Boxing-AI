@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Package, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,14 +21,14 @@ export const LoginPage = () => {
             <Package className="text-white" size={40} />
           </div>
           
-          <h1 className="text-3xl font-black text-gray-900 dark:text-white mb-2">BoxWise</h1>
-          <p className="text-gray-500 dark:text-gray-400 mb-8 font-medium">
-            Organize suas caixas e encontre tudo instantaneamente.
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">BoxTrack AI</h1>
+          <p className="text-gray-500 dark:text-gray-400 mb-8">
+            Organize your boxes, track items, and find everything instantly.
           </p>
 
           <button
             onClick={signInWithGoogle}
-            className="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 font-bold py-4 px-6 rounded-xl transition-all shadow-sm group active:scale-95"
+            className="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 font-semibold py-4 px-6 rounded-xl transition-all shadow-sm group"
           >
             <svg className="w-6 h-6" viewBox="0 0 24 24">
               <path
@@ -49,11 +48,11 @@ export const LoginPage = () => {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
               />
             </svg>
-            <span>Entrar com Google</span>
+            <span>Continue with Google</span>
           </button>
           
-          <p className="mt-8 text-[10px] text-gray-400 dark:text-gray-600 font-bold uppercase tracking-widest">
-            BoxWise Inventory System
+          <p className="mt-8 text-xs text-gray-400 dark:text-gray-600">
+            By continuing, you agree to organize your life.
           </p>
         </div>
       </div>

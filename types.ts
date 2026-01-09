@@ -1,4 +1,3 @@
-
 export interface Location {
   id: string;
   user_id?: string;
@@ -23,6 +22,13 @@ export interface Item {
   material?: string;
   color?: string;
   createdAt: number;
+}
+
+export interface AIAnalysisResult {
+  name: string;
+  description: string;
+  material: string;
+  color: string;
 }
 
 export interface AppData {

@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabaseClient';
@@ -13,8 +12,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Fix: Explicitly define children as optional to satisfy TypeScript in environments with strict React 18 child checks
-export const AuthProvider = ({ children }: { children?: React.ReactNode }) => {
+export const AuthProvider = ({ children }: React.PropsWithChildren) => {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
