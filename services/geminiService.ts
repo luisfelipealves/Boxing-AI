@@ -1,6 +1,8 @@
+
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { AIAnalysisResult } from "../types";
 
+// Always use a named parameter for API key initialization
 const getAiClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
@@ -39,8 +41,9 @@ export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisR
   const prompt = "Analyze this image. Identify the main object. Provide a short name (max 3 words), a brief description (max 1 sentence), the primary material (e.g., plastic, wood), and the primary color. If the material or color cannot be clearly determined from the image, return an empty string for those fields. Do not invent information.";
 
   try {
+    // Using gemini-3-flash-preview as per task requirements
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: {
         parts: [
           fileToGenerativePart(base64Data, mimeType),
@@ -53,6 +56,7 @@ export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisR
       },
     });
 
+    // Access .text property directly (not a function)
     const text = response.text;
     if (!text) throw new Error("No response text from Gemini");
 
@@ -78,7 +82,7 @@ export const analyzeItemAudio = async (base64Audio: string): Promise<AIAnalysisR
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: {
         parts: [
           fileToGenerativePart(base64Data, mimeType), 
@@ -106,7 +110,7 @@ export const createInventoryChat = (inventoryContext: string): Chat => {
   const ai = getAiClient();
   
   return ai.chats.create({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3-flash-preview',
     config: {
       systemInstruction: `You are BoxTrack Assistant, a helpful and friendly AI for home inventory management. 
       
