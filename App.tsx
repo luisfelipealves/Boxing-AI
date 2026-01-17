@@ -287,24 +287,32 @@ const AssistantChat = () => {
 
 const HomePage = () => {
   const [boxes, setBoxes] = useState<Box[]>([]);
+  const [locations, setLocations] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadBoxes();
+    loadData();
     // Set up real-time subscription or simple refresh
-    const interval = setInterval(loadBoxes, 5000);
+    const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const loadBoxes = async () => {
+  const loadData = async () => {
     try {
-      const data = await storage.getBoxes();
-      setBoxes(data);
+      const [boxesData, locationsData] = await Promise.all([
+        storage.getBoxes(),
+        storage.getLocations()
+      ]);
+      setBoxes(boxesData);
+
+      const locMap: Record<string, string> = {};
+      locationsData.forEach(l => locMap[l.id] = l.name);
+      setLocations(locMap);
     } catch (error) {
-      console.error("Failed to load boxes", error);
+      console.error("Failed to load data", error);
     } finally {
       setLoading(false);
     }
@@ -388,8 +396,8 @@ const HomePage = () => {
                   <BoxIcon size={20} className="text-indigo-500" />
                   <h3 className="font-semibold text-gray-900 dark:text-white">{box.name}</h3>
                 </div>
-                <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
-                  {box.locationId ? 'LOCATED' : 'UNASSIGNED'}
+                <span className={`text-xs font-mono px-2 py-1 rounded ${box.locationId ? 'text-indigo-600 bg-indigo-50 dark:text-indigo-300 dark:bg-indigo-900/30' : 'text-gray-400 bg-gray-100 dark:bg-gray-800'}`}>
+                  {box.locationId ? locations[box.locationId] || 'LOCATED' : 'UNASSIGNED'}
                 </span>
               </div>
               {box.description && (
@@ -406,7 +414,7 @@ const HomePage = () => {
       >
         <Plus size={24} />
       </button>
-    </div>
+    </div >
   );
 };
 
@@ -476,10 +484,181 @@ const LocationsPage = () => {
 };
 
 
+const AddBoxPage = () => {
+  const navigate = useNavigate();
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [locationId, setLocationId] = useState('');
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Inline Location Creation State
+  const [isCreatingLocation, setIsCreatingLocation] = useState(false);
+  const [newLocName, setNewLocName] = useState('');
+  const [newLocDesc, setNewLocDesc] = useState('');
+
+  useEffect(() => {
+    storage.getLocations().then(setLocations);
+  }, []);
+
+  const handleSubmit = async () => {
+    if (!name.trim() || !locationId) return;
+    setIsSubmitting(true);
+    try {
+      await storage.addBox({
+        name,
+        description,
+        locationId
+      });
+      navigate('/');
+    } catch (error) {
+      console.error("Failed to add box", error);
+      alert("Failed to create box");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateLocation = async () => {
+    if (!newLocName.trim()) return;
+    try {
+      const newLocation = await storage.addLocation({
+        name: newLocName,
+        description: newLocDesc
+      });
+      const updatedLocations = await storage.getLocations();
+      setLocations(updatedLocations);
+      setLocationId(newLocation.id);
+      setIsCreatingLocation(false);
+      setNewLocName('');
+      setNewLocDesc('');
+    } catch (error) {
+      console.error("Failed to create location", error);
+      alert("Failed to create location");
+    }
+  };
+
+  return (
+    <div className="pb-safe min-h-screen bg-white dark:bg-gray-950">
+      <Header title="New Box" backTo="/" />
+
+      <div className="p-4 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+          <input
+            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+            placeholder="e.g. Summer Clothes"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            autoFocus
+          />
+        </div>
+
+        <div>
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Location <span className="text-red-500">*</span></label>
+              <button
+                onClick={() => setIsCreatingLocation(true)}
+                className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+              >
+                + New Location
+              </button>
+            </div>
+            <select
+              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+              value={locationId}
+              onChange={e => setLocationId(e.target.value)}
+            >
+              <option value="">Select a location</option>
+              {locations.map(loc => (
+                <option key={loc.id} value={loc.id}>{loc.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+            <textarea
+              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 min-h-[100px] resize-none dark:text-white"
+              placeholder="Optional details..."
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+            />
+          </div>
+
+          <div className="pt-4 flex gap-3">
+            <button
+              onClick={() => navigate('/')}
+              className="flex-1 py-3 text-gray-600 dark:text-gray-400 font-medium hover:bg-gray-50 dark:hover:bg-gray-900 rounded-xl transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!name.trim() || !locationId || isSubmitting}
+              className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none"
+            >
+              {isSubmitting ? 'Creating...' : 'Create Box'}
+            </button>
+          </div>
+        </div>
+      </div>
+      {/* Inline Location Creation Modal */}
+      {
+        isCreatingLocation && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+              <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center">
+                <h3 className="font-bold text-lg dark:text-white">New Location</h3>
+                <button
+                  onClick={() => setIsCreatingLocation(false)}
+                  className="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 p-1 rounded-full"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+                  <input
+                    className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                    placeholder="e.g. Garage"
+                    value={newLocName}
+                    onChange={e => setNewLocName(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+                  <textarea
+                    className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white resize-none h-20"
+                    placeholder="Optional..."
+                    value={newLocDesc}
+                    onChange={e => setNewLocDesc(e.target.value)}
+                  />
+                </div>
+                <button
+                  onClick={handleCreateLocation}
+                  disabled={!newLocName.trim()}
+                  className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl disabled:opacity-50 hover:bg-indigo-700 transition-colors"
+                >
+                  Create Location
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </div>
+  );
+};
+
 const BoxDetailsPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [box, setBox] = useState<Box | null>(null);
+  const [locationName, setLocationName] = useState<string>('');
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -495,7 +674,13 @@ const BoxDetailsPage = () => {
         storage.getBoxById(id),
         storage.getItemsByBox(id)
       ]);
-      if (boxData) setBox(boxData);
+      if (boxData) {
+        setBox(boxData);
+        if (boxData.locationId) {
+          const loc = await storage.getLocationById(boxData.locationId);
+          if (loc) setLocationName(loc.name);
+        }
+      }
       setItems(itemsData);
     } catch (error) {
       console.error("Failed to load box details", error);
@@ -528,6 +713,15 @@ const BoxDetailsPage = () => {
         <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-2">
           <BoxIcon size={16} />
           <span>Details</span>
+          {locationName && (
+            <>
+              <span>•</span>
+              <div className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
+                <MapPin size={14} />
+                <span className="font-medium">{locationName}</span>
+              </div>
+            </>
+          )}
         </div>
         {box.description && (
           <p className="text-gray-700 dark:text-gray-300">{box.description}</p>
@@ -970,6 +1164,7 @@ const MainApp = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/box/new" element={<AddBoxPage />} />
         <Route path="/box/:id" element={<BoxDetailsPage />} />
         <Route path="/box/:id/add-item" element={<AddItemPage />} />
         <Route path="/item/:id" element={<EditItemPage />} />
