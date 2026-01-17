@@ -1,16 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link, useNavigate, useParams, useLocation, Navigate } from 'react-router-dom';
-import { 
-  Package, 
-  MapPin, 
-  Plus, 
-  Search, 
-  QrCode, 
-  Camera, 
-  ArrowRight, 
-  Printer, 
-  Move, 
+import {
+  Package,
+  MapPin,
+  Plus,
+  Search,
+  QrCode,
+  Camera,
+  ArrowRight,
+  Printer,
+  Move,
   Trash2,
   Sparkles,
   ChevronLeft,
@@ -38,13 +38,14 @@ import {
   User
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
+import { QRScanner } from './components/QRScanner';
 import { v4 as uuidv4 } from 'uuid';
 import { Chat, GenerateContentResponse } from "@google/genai";
 
 import { Location, Box, Item } from './types';
 import * as storage from './services/storageService';
 import { analyzeItemImage, analyzeItemAudio, createInventoryChat } from './services/geminiService';
-import { QRScanner } from './components/QRScanner';
+
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginPage } from './components/LoginPage';
 
@@ -60,19 +61,19 @@ const PageLoader = ({ text = "Loading..." }: { text?: string }) => (
 const ErrorDisplay = ({ message, onRetry }: { message: string; onRetry?: () => void; }) => (
   <div className="flex flex-col items-center justify-center h-[calc(100vh-150px)] bg-gray-50 dark:bg-gray-950 p-4">
     <div className="text-center">
-        <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 mx-auto">
-            <AlertTriangle size={32} />
-        </div>
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Oops! Something went wrong.</h2>
-        <p className="text-gray-600 dark:text-gray-300 mb-6">{message}</p>
-        {onRetry && (
-            <button
-                onClick={onRetry}
-                className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 mx-auto"
-            >
-                <RefreshCw size={16} /> Try Again
-            </button>
-        )}
+      <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 mx-auto">
+        <AlertTriangle size={32} />
+      </div>
+      <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Oops! Something went wrong.</h2>
+      <p className="text-gray-600 dark:text-gray-300 mb-6">{message}</p>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 mx-auto"
+        >
+          <RefreshCw size={16} /> Try Again
+        </button>
+      )}
     </div>
   </div>
 );
@@ -88,10 +89,10 @@ const AudioWaveform = ({ stream }: { stream: MediaStream }) => {
     const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const analyser = audioCtx.createAnalyser();
     const source = audioCtx.createMediaStreamSource(stream);
-    
+
     source.connect(analyser);
     analyser.fftSize = 2048;
-    
+
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
     const canvas = canvasRef.current;
@@ -143,10 +144,10 @@ const AudioWaveform = ({ stream }: { stream: MediaStream }) => {
 
   return (
     <div className="w-full h-16 bg-red-50 dark:bg-red-900/10 rounded-xl overflow-hidden border border-red-100 dark:border-red-900/30 mb-3 flex items-center justify-center">
-      <canvas 
-        ref={canvasRef} 
-        width={600} 
-        height={100} 
+      <canvas
+        ref={canvasRef}
+        width={600}
+        height={100}
         className="w-full h-full"
       />
     </div>
@@ -155,7 +156,7 @@ const AudioWaveform = ({ stream }: { stream: MediaStream }) => {
 
 const Navigation = () => {
   const location = useLocation();
-  
+
   const isActive = (path: string) => location.pathname === path ? "text-indigo-600 dark:text-indigo-400" : "text-gray-500 dark:text-gray-400";
 
   return (
@@ -188,27 +189,27 @@ const Header: React.FC<{ title: string; backTo?: string; action?: React.ReactNod
         <h1 className="text-lg font-bold text-gray-900 dark:text-white truncate">{title}</h1>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-        <a 
-          href="https://www.buymeacoffee.com/luisfelipeg1" 
-          target="_blank" 
+        <a
+          href="https://www.buymeacoffee.com/luisfelipeg1"
+          target="_blank"
           rel="noopener noreferrer"
           className="hidden sm:block transition-transform active:scale-95"
         >
-          <img 
-            src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" 
-            alt="Buy Me A Coffee" 
+          <img
+            src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+            alt="Buy Me A Coffee"
             style={{ height: '36px', width: 'auto' }}
           />
         </a>
-        <a 
-          href="https://www.buymeacoffee.com/luisfelipeg1" 
-          target="_blank" 
+        <a
+          href="https://www.buymeacoffee.com/luisfelipeg1"
+          target="_blank"
           rel="noopener noreferrer"
           className="sm:hidden block p-1.5 bg-[#FFDD00] rounded-lg transition-transform active:scale-95 border border-black/10"
         >
-          <img 
-            src="https://cdn.buymeacoffee.com/widget/assets/images/bmc-btn-logo.svg" 
-            alt="BMC" 
+          <img
+            src="https://cdn.buymeacoffee.com/widget/assets/images/bmc-btn-logo.svg"
+            alt="BMC"
             style={{ height: '20px', width: '20px' }}
           />
         </a>
@@ -221,79 +222,728 @@ const Header: React.FC<{ title: string; backTo?: string; action?: React.ReactNod
 // ... [Setting up standard application routes and pages] ...
 
 const AssistantChat = () => {
-    const [messages, setMessages] = useState<{role: 'user' | 'bot', text: string}[]>([]);
-    const [input, setInput] = useState('');
-    const [isThinking, setIsThinking] = useState(false);
-    const chatRef = useRef<Chat | null>(null);
+  const [messages, setMessages] = useState<{ role: 'user' | 'bot', text: string }[]>([]);
+  const [input, setInput] = useState('');
+  const [isThinking, setIsThinking] = useState(false);
+  const chatRef = useRef<Chat | null>(null);
 
-    const initChat = async () => {
-        const inventory = await storage.generateHumanReadableInventory();
-        chatRef.current = createInventoryChat(inventory);
-    };
+  const initChat = async () => {
+    const inventory = await storage.generateHumanReadableInventory();
+    chatRef.current = createInventoryChat(inventory);
+  };
 
-    useEffect(() => {
-        initChat();
-    }, []);
+  useEffect(() => {
+    initChat();
+  }, []);
 
-    const handleSend = async () => {
-        if (!input.trim() || !chatRef.current || isThinking) return;
-        
-        const userMsg = input;
-        setInput('');
-        setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-        setIsThinking(true);
+  const handleSend = async () => {
+    if (!input.trim() || !chatRef.current || isThinking) return;
 
-        try {
-            const response = await chatRef.current.sendMessage({ message: userMsg });
-            // Access .text property directly
-            setMessages(prev => [...prev, { role: 'bot', text: response.text || "I'm sorry, I couldn't process that." }]);
-        } catch (error) {
-            setMessages(prev => [...prev, { role: 'bot', text: "Error communicating with the assistant." }]);
-        } finally {
-            setIsThinking(false);
-        }
-    };
+    const userMsg = input;
+    setInput('');
+    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setIsThinking(true);
 
-    return (
-        <div className="pb-24 flex flex-col h-screen">
-            <Header title="BoxTrack Assistant" />
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((m, i) => (
-                    <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] p-3 rounded-2xl ${m.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700'}`}>
-                            {m.text}
-                        </div>
-                    </div>
-                ))}
-                {isThinking && <div className="text-gray-400 text-sm animate-pulse">Assistant is thinking...</div>}
+    try {
+      const response = await chatRef.current.sendMessage({ message: userMsg });
+      // Access .text property directly
+      setMessages(prev => [...prev, { role: 'bot', text: response.text || "I'm sorry, I couldn't process that." }]);
+    } catch (error) {
+      setMessages(prev => [...prev, { role: 'bot', text: "Error communicating with the assistant." }]);
+    } finally {
+      setIsThinking(false);
+    }
+  };
+
+  return (
+    <div className="pb-24 flex flex-col h-screen">
+      <Header title="BoxTrack Assistant" />
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((m, i) => (
+          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] p-3 rounded-2xl ${m.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700'}`}>
+              {m.text}
             </div>
-            <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex gap-2">
-                <input 
-                    className="flex-1 bg-gray-100 dark:bg-gray-800 p-3 rounded-xl outline-none dark:text-white"
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSend()}
-                    placeholder="Ask about your boxes..."
-                />
-                <button onClick={handleSend} className="bg-indigo-600 text-white p-3 rounded-xl">
-                    <Send size={20} />
-                </button>
-            </div>
-        </div>
-    );
-};
-
-const SettingsPage = () => {
-    // ... Existing implementation
-    return null; // Placeholder for brevity
+          </div>
+        ))}
+        {isThinking && <div className="text-gray-400 text-sm animate-pulse">Assistant is thinking...</div>}
+      </div>
+      <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 flex gap-2">
+        <input
+          className="flex-1 bg-gray-100 dark:bg-gray-800 p-3 rounded-xl outline-none dark:text-white"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSend()}
+          placeholder="Ask about your boxes..."
+        />
+        <button onClick={handleSend} className="bg-indigo-600 text-white p-3 rounded-xl">
+          <Send size={20} />
+        </button>
+      </div>
+    </div>
+  );
 };
 
 const HomePage = () => {
-    // ... Existing implementation
-    return null; // Placeholder for brevity
+  const [boxes, setBoxes] = useState<Box[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isScanning, setIsScanning] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    loadBoxes();
+    // Set up real-time subscription or simple refresh
+    const interval = setInterval(loadBoxes, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadBoxes = async () => {
+    try {
+      const data = await storage.getBoxes();
+      setBoxes(data);
+    } catch (error) {
+      console.error("Failed to load boxes", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleScan = (data: string) => {
+    if (data) {
+      // Check if it's a URL or direct ID
+      // Expected format: .../#/box/ID or just ID
+      let boxId = data;
+      if (data.includes('/box/')) {
+        const parts = data.split('/box/');
+        if (parts.length > 1) {
+          boxId = parts[1];
+        }
+      }
+
+      setIsScanning(false);
+      if (boxId) {
+        navigate(`/box/${boxId}`);
+      } else {
+        alert('Invalid QR Code');
+      }
+    }
+  };
+
+  const filteredBoxes = boxes.filter(box =>
+    box.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    box.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) return <PageLoader />;
+
+  return (
+    <div className="pb-24 min-h-screen">
+      {isScanning && (
+        <QRScanner
+          onScan={handleScan}
+          onClose={() => setIsScanning(false)}
+        />
+      )}
+      <Header
+        title="My Boxes"
+        action={
+          <div className="flex items-center gap-2">
+            <button onClick={() => setIsScanning(true)} className="text-gray-600 dark:text-gray-300">
+              <Camera size={24} />
+            </button>
+            <button onClick={() => navigate('/settings')} className="text-gray-600 dark:text-gray-300">
+              <Settings size={24} />
+            </button>
+          </div>
+        }
+      />
+
+      <div className="p-4 sticky top-[60px] z-20 bg-gray-50/95 dark:bg-gray-950/95 backdrop-blur-sm">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search boxes..."
+            className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl py-3 pl-10 pr-4 outline-none focus:ring-2 focus:ring-indigo-500 transition-all dark:text-white"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="px-4 space-y-3">
+        {filteredBoxes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+            <Package size={48} className="mb-4 opacity-50" />
+            <p>No boxes found.</p>
+            <p className="text-sm">Tap + to add your first box.</p>
+          </div>
+        ) : (
+          filteredBoxes.map(box => (
+            <div key={box.id} onClick={() => navigate(`/box/${box.id}`)} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 active:scale-[0.98] transition-all cursor-pointer shadow-sm hover:shadow-md">
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex items-center gap-2">
+                  <BoxIcon size={20} className="text-indigo-500" />
+                  <h3 className="font-semibold text-gray-900 dark:text-white">{box.name}</h3>
+                </div>
+                <span className="text-xs font-mono text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                  {box.locationId ? 'LOCATED' : 'UNASSIGNED'}
+                </span>
+              </div>
+              {box.description && (
+                <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-2">{box.description}</p>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      <button
+        onClick={() => navigate('/box/new')}
+        className="fixed right-6 bottom-24 shadow-lg shadow-indigo-500/30 bg-indigo-600 text-white p-4 rounded-full active:scale-95 transition-all z-30 hover:bg-indigo-700"
+      >
+        <Plus size={24} />
+      </button>
+    </div>
+  );
 };
 
-// ... [Omitted other page components for brevity as they are already provided in the prompt] ...
+const LocationsPage = () => {
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    loadLocations();
+  }, []);
+
+  const loadLocations = async () => {
+    try {
+      const data = await storage.getLocations();
+      setLocations(data);
+    } catch (error) {
+      console.error("Failed to load locations", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <PageLoader />;
+
+  return (
+    <div className="pb-24 min-h-screen">
+      <Header
+        title="Locations"
+        action={
+          <button onClick={() => navigate('/settings')} className="text-gray-600 dark:text-gray-300">
+            <Settings size={24} />
+          </button>
+        }
+      />
+
+      <div className="px-4 py-4 space-y-3">
+        {locations.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+            <MapPin size={48} className="mb-4 opacity-50" />
+            <p>No locations defined.</p>
+            <p className="text-sm">Create a location to organize your boxes.</p>
+          </div>
+        ) : (
+          locations.map(loc => (
+            <div key={loc.id} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+              <div className="flex items-center gap-2 mb-1">
+                <MapPin size={20} className="text-emerald-500" />
+                <h3 className="font-semibold text-gray-900 dark:text-white">{loc.name}</h3>
+              </div>
+              {loc.description && (
+                <p className="text-gray-600 dark:text-gray-400 text-sm">{loc.description}</p>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      <button
+        onClick={() => navigate('/location/new')}
+        className="fixed right-6 bottom-24 shadow-lg shadow-emerald-500/30 bg-emerald-600 text-white p-4 rounded-full active:scale-95 transition-all z-30 hover:bg-emerald-700"
+      >
+        <Plus size={24} />
+      </button>
+    </div>
+  );
+};
+
+
+const BoxDetailsPage = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [box, setBox] = useState<Box | null>(null);
+  const [items, setItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id) return;
+    loadData();
+  }, [id]);
+
+  const loadData = async () => {
+    if (!id) return;
+    try {
+      const [boxData, itemsData] = await Promise.all([
+        storage.getBoxById(id),
+        storage.getItemsByBox(id)
+      ]);
+      if (boxData) setBox(boxData);
+      setItems(itemsData);
+    } catch (error) {
+      console.error("Failed to load box details", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <PageLoader />;
+  if (!box) return <ErrorDisplay message="Box not found" />;
+
+  return (
+    <div className="pb-24 min-h-screen">
+      <Header
+        title={box.name}
+        backTo="/"
+        action={
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigate(`/box/${id}/print`)} className="text-gray-600 dark:text-gray-300">
+              <Printer size={24} />
+            </button>
+            <button onClick={() => navigate(`/box/${id}/edit`)} className="text-gray-600 dark:text-gray-300">
+              <FilePenLine size={24} />
+            </button>
+          </div>
+        }
+      />
+
+      <div className="p-4 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 mb-4">
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-2">
+          <BoxIcon size={16} />
+          <span>Details</span>
+        </div>
+        {box.description && (
+          <p className="text-gray-700 dark:text-gray-300">{box.description}</p>
+        )}
+      </div>
+
+      <div className="px-4 space-y-3">
+        <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1 mb-2">
+          Items inside ({items.length})
+        </h3>
+
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400 bg-gray-100/50 dark:bg-gray-800/30 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+            <Package size={32} className="mb-3 opacity-50" />
+            <p>This box is empty.</p>
+            <button
+              onClick={() => navigate(`/box/${id}/add-item`)}
+              className="mt-4 text-indigo-600 dark:text-indigo-400 font-medium text-sm hover:underline"
+            >
+              Add first item
+            </button>
+          </div>
+        ) : (
+          items.map(item => (
+            <div key={item.id} onClick={() => navigate(`/item/${item.id}`)} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm flex items-center justify-between cursor-pointer active:scale-[0.98] transition-all hover:bg-gray-50 dark:hover:bg-gray-800">
+              <div>
+                <h3 className="font-semibold text-gray-900 dark:text-white">{item.name}</h3>
+                {item.description && (
+                  <p className="text-gray-500 dark:text-gray-400 text-sm line-clamp-1">{item.description}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                {item.material && (
+                  <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-lg">
+                    {item.material}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <button
+        onClick={() => navigate(`/box/${id}/add-item`)}
+        className="fixed right-6 bottom-24 shadow-lg shadow-indigo-500/30 bg-indigo-600 text-white p-4 rounded-full active:scale-95 transition-all z-30 hover:bg-indigo-700"
+      >
+        <Plus size={24} />
+      </button>
+    </div>
+  );
+};
+
+const AddItemPage = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [material, setMaterial] = useState('');
+  const [color, setColor] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!id || !name.trim()) return;
+    setIsSubmitting(true);
+    try {
+      await storage.addItem({
+        boxId: id,
+        name,
+        description,
+        material,
+        color
+      });
+      navigate(-1);
+    } catch (error) {
+      console.error("Failed to add item", error);
+      alert("Failed to save item. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="pb-safe min-h-screen bg-white dark:bg-gray-950">
+      <Header
+        title="New Item"
+        backTo={`/box/${id}`}
+      />
+
+      <div className="p-4 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+          <input
+            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+            placeholder="e.g. Winter Jacket"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            autoFocus
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+          <textarea
+            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 min-h-[100px] resize-none dark:text-white"
+            placeholder="Optional details..."
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Material</label>
+            <input
+              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+              placeholder="e.g. Cotton"
+              value={material}
+              onChange={e => setMaterial(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Color</label>
+            <input
+              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+              placeholder="e.g. Red"
+              value={color}
+              onChange={e => setColor(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="pt-4 flex gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex-1 py-3 text-gray-600 dark:text-gray-400 font-medium hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim() || isSubmitting}
+            className="flex-1 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+            Save Item
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const EditItemPage = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [material, setMaterial] = useState('');
+  const [color, setColor] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [item, setItem] = useState<Item | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    loadItem();
+  }, [id]);
+
+  const loadItem = async () => {
+    if (!id) return;
+    try {
+      const data = await storage.getItemById(id);
+      if (data) {
+        setItem(data);
+        setName(data.name);
+        setDescription(data.description || '');
+        setMaterial(data.material || '');
+        setColor(data.color || '');
+      }
+    } catch (error) {
+      console.error("Failed to load item", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!id || !name.trim() || !item) return;
+    setIsSubmitting(true);
+    try {
+      await storage.updateItem({
+        ...item,
+        name,
+        description,
+        material,
+        color
+      });
+      navigate(-1);
+    } catch (error) {
+      console.error("Failed to update item", error);
+      alert("Failed to save changes. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id || !confirm("Are you sure you want to delete this item?")) return;
+    setIsSubmitting(true);
+    try {
+      await storage.deleteItem(id);
+      navigate(-1);
+    } catch (error) {
+      console.error("Failed to delete item", error);
+      alert("Failed to delete item. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (loading) return <PageLoader />;
+  if (!item) return <ErrorDisplay message="Item not found" />;
+
+  return (
+    <div className="pb-safe min-h-screen bg-white dark:bg-gray-950">
+      <Header
+        title="Edit Item"
+        backTo={`/box/${item.boxId}`}
+        action={
+          <button onClick={handleDelete} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-full transition-colors">
+            <Trash2 size={20} />
+          </button>
+        }
+      />
+
+      <div className="p-4 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+          <input
+            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+            value={name}
+            onChange={e => setName(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+          <textarea
+            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 min-h-[100px] resize-none dark:text-white"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Material</label>
+            <input
+              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+              value={material}
+              onChange={e => setMaterial(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Color</label>
+            <input
+              className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+              value={color}
+              onChange={e => setColor(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="pt-4 flex gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex-1 py-3 text-gray-600 dark:text-gray-400 font-medium hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim() || isSubmitting}
+            className="flex-1 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BoxLabelPage = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [box, setBox] = useState<Box | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    storage.getBoxById(id).then(data => {
+      if (data) setBox(data);
+    });
+  }, [id]);
+
+  if (!box) return <PageLoader />;
+
+  // URL format: Current Origin + /#/box/ID
+  const qrValue = `${window.location.origin}${window.location.pathname}#/box/${id}`;
+
+  return (
+    <div className="min-h-screen bg-white">
+      <div className="print:hidden p-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="mb-4 flex items-center gap-2 text-gray-600 hover:bg-gray-100 p-2 rounded-lg"
+        >
+          <ChevronLeft size={20} /> Back
+        </button>
+        <div className="bg-blue-50 p-4 rounded-xl text-blue-800 text-sm mb-4 border border-blue-100">
+          ℹ️ Connect to a printer and tap the button below. This view is optimized for label printers.
+        </div>
+        <button
+          onClick={() => window.print()}
+          className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+        >
+          <Printer size={20} /> Print Label
+        </button>
+      </div>
+
+      <div className="flex flex-col items-center justify-center p-8 border-4 border-black m-4 rounded-3xl print:border-4 print:m-0 print:p-4 print:h-screen print:flex print:items-center print:justify-center">
+        <div className="text-center space-y-4">
+          <h1 className="text-4xl font-black text-black uppercase tracking-tighter leading-none mb-4">
+            {box.name}
+          </h1>
+
+          <div className="bg-white p-2 inline-block">
+            <QRCode
+              value={qrValue}
+              size={256}
+              level="H"
+            />
+          </div>
+
+          <div className="text-center mt-4 space-y-1">
+            <p className="text-sm font-mono text-gray-500 uppercase tracking-widest">BOX ID</p>
+            <p className="font-mono font-bold text-xl">{box.id.slice(0, 8)}</p>
+          </div>
+          <div className="mt-8 pt-4 border-t-2 border-gray-100 w-full">
+            <p className="text-gray-400 font-bold tracking-widest uppercase text-xs">Property of BoxTrack</p>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+                @media print {
+                    @page {
+                        margin: 0;
+                        size: auto;
+                    }
+                    body {
+                        background: white;
+                    }
+                }
+            `}</style>
+    </div>
+  );
+};
+
+const SettingsPage = () => {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  return (
+    <div className="pb-24 min-h-screen bg-gray-50 dark:bg-gray-950">
+      <Header title="Settings" backTo="/" />
+
+      <div className="p-4 space-y-6">
+        <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col items-center text-center">
+          <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-4">
+            <User size={32} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Account</h2>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">{user?.email}</p>
+
+          <button
+            onClick={signOut}
+            className="w-full py-3 px-4 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 rounded-xl font-medium hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-2"
+          >
+            <LogOut size={20} /> Sign Out
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 ml-1">APP INFO</h3>
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+            <div className="p-4 flex justify-between items-center border-b border-gray-100 dark:border-gray-800">
+              <span className="text-gray-900 dark:text-white">Version</span>
+              <span className="text-gray-500 text-sm">1.0.0</span>
+            </div>
+            <a
+              href="https://github.com/luisfelipeg1"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-4 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              <span className="text-gray-900 dark:text-white">Developer</span>
+              <span className="text-indigo-600 dark:text-indigo-400 text-sm">Luis Felipe</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const MainApp = () => {
   const { user, loading } = useAuth();
@@ -305,9 +955,13 @@ const MainApp = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
       <Routes>
         <Route path="/" element={<HomePage />} />
+        <Route path="/box/:id" element={<BoxDetailsPage />} />
+        <Route path="/box/:id/add-item" element={<AddItemPage />} />
+        <Route path="/item/:id" element={<EditItemPage />} />
+        <Route path="/box/:id/print" element={<BoxLabelPage />} />
+        <Route path="/locations" element={<LocationsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/chat" element={<AssistantChat />} />
-        {/* Add more routes as needed */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       <Navigation />
