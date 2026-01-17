@@ -50,13 +50,13 @@ export const getLocations = async (): Promise<Location[]> => {
 
 export const addLocation = async (location: Omit<Location, 'id'>): Promise<Location> => {
   const userId = await getCurrentUserId();
-  
+
   const { data, error } = await supabase
     .from('locations')
-    .insert({ 
-      name: location.name, 
+    .insert({
+      name: location.name,
       description: location.description,
-      user_id: userId 
+      user_id: userId
     })
     .select()
     .single();
@@ -146,6 +146,17 @@ export const getItems = async (): Promise<Item[]> => {
   const { data, error } = await supabase
     .from('items')
     .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data.map(mapItem);
+};
+
+export const getItemsByBox = async (boxId: string): Promise<Item[]> => {
+  const { data, error } = await supabase
+    .from('items')
+    .select('*')
+    .eq('box_id', boxId)
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -243,11 +254,11 @@ export const importData = async (data: AppData): Promise<{ success: boolean }> =
 };
 
 export const generateHumanReadableInventory = async (): Promise<string> => {
-    const [locations, boxes, items] = await Promise.all([
-        getLocations(),
-        getBoxes(),
-        getItems(),
-    ]);
+  const [locations, boxes, items] = await Promise.all([
+    getLocations(),
+    getBoxes(),
+    getItems(),
+  ]);
 
   let output = "MY INVENTORY DATA:\n\n";
 
@@ -256,7 +267,7 @@ export const generateHumanReadableInventory = async (): Promise<string> => {
   locations.forEach(loc => {
     output += `📍 LOCATION: ${loc.name}\n`;
     const locBoxes = boxes.filter(b => b.locationId === loc.id);
-    
+
     if (locBoxes.length === 0) {
       output += `   (No boxes here)\n`;
     } else {
