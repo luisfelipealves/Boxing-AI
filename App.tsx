@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { QRScanner } from './components/QRScanner';
+import { VoiceInput } from './components/VoiceInput';
 import { v4 as uuidv4 } from 'uuid';
 import { Chat, GenerateContentResponse } from "@google/genai";
 
@@ -617,6 +618,13 @@ const AddItemPage = () => {
       />
 
       <div className="p-4 space-y-4">
+        <VoiceInput onItemParsed={(item) => {
+          if (item.name) setName(item.name);
+          if (item.description) setDescription(item.description);
+          if (item.material) setMaterial(item.material);
+          if (item.color) setColor(item.color);
+        }} />
+
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
           <input
@@ -764,6 +772,13 @@ const EditItemPage = () => {
       />
 
       <div className="p-4 space-y-4">
+        <VoiceInput onItemParsed={(item) => {
+          if (item.name) setName(item.name);
+          if (item.description) setDescription(item.description);
+          if (item.material) setMaterial(item.material);
+          if (item.color) setColor(item.color);
+        }} />
+
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
           <input
