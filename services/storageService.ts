@@ -74,6 +74,17 @@ export const deleteLocation = async (locationId: string): Promise<void> => {
   if (error) throw error;
 };
 
+export const getLocationById = async (id: string): Promise<Location | undefined> => {
+  const { data, error } = await supabase
+    .from('locations')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) return undefined;
+  return mapLocation(data);
+};
+
 // --- BOXES ---
 
 export const getBoxes = async (): Promise<Box[]> => {
