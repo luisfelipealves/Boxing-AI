@@ -4,10 +4,10 @@ import { AIAnalysisResult } from "../types";
 
 // Always use a named parameter for API key initialization
 const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = import.meta.env.VITE_GOOGLE_GENAI_API_KEY;
   if (!apiKey) {
     console.error("API_KEY is missing");
-    throw new Error("API Key is missing. Please set the API_KEY environment variable.");
+    throw new Error("API Key is missing. Please set the VITE_GOOGLE_GENAI_API_KEY environment variable.");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -34,11 +34,11 @@ const RESPONSE_SCHEMA = {
 
 export const analyzeItemImage = async (base64Image: string): Promise<AIAnalysisResult> => {
   const ai = getAiClient();
-  
+
   const base64Data = base64Image.split(',')[1];
   const mimeType = base64Image.substring(base64Image.indexOf(':') + 1, base64Image.indexOf(';'));
 
-  const prompt = "Analyze this image. Identify the main object. Provide a short name (max 3 words), a brief description (max 1 sentence), the primary material (e.g., plastic, wood), and the primary color. If the material or color cannot be clearly determined from the image, return an empty string for those fields. Do not invent information.";
+  const prompt = "Analise esta imagem. Identifique o objeto principal. Forneça um nome curto (máx. 3 palavras), uma breve descrição (máx. 1 frase), o material principal (ex: plástico, madeira) e a cor principal. Se o material ou a cor não puderem ser claramente determinados, retorne uma string vazia para esses campos. Não invente informações. Responda APENAS em Português.";
 
   try {
     // Using gemini-3-flash-preview as per task requirements
@@ -72,20 +72,20 @@ export const analyzeItemAudio = async (base64Audio: string): Promise<AIAnalysisR
   const ai = getAiClient();
 
   const base64Data = base64Audio.split(',')[1];
-  let mimeType = 'audio/mp3'; 
+  let mimeType = 'audio/mp3';
   const mimeMatch = base64Audio.match(/data:([^;]+)/);
   if (mimeMatch && mimeMatch[1]) {
     mimeType = mimeMatch[1];
   }
 
-  const prompt = "Listen to this audio description of an item. Extract the following details: a short name (max 3 words), a brief description (max 1 sentence), the primary material, and the primary color. If specific details like description, material, or color aren't explicitly mentioned in the audio, return an empty string for those fields. Do not guess or invent information not present in the audio.";
+  const prompt = "Ouça esta descrição de áudio de um item. Extraia os seguintes detalhes: um nome curto (máx. 3 palavras), uma breve descrição (máx. 1 frase), o material principal e a cor principal. Se detalhes específicos não forem mencionados explicitamente, retorne uma string vazia. Não adivinhe informações. Responda APENAS em Português.";
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: {
         parts: [
-          fileToGenerativePart(base64Data, mimeType), 
+          fileToGenerativePart(base64Data, mimeType),
           { text: prompt }
         ]
       },
@@ -108,21 +108,22 @@ export const analyzeItemAudio = async (base64Audio: string): Promise<AIAnalysisR
 
 export const createInventoryChat = (inventoryContext: string): Chat => {
   const ai = getAiClient();
-  
+
   return ai.chats.create({
     model: 'gemini-3-flash-preview',
     config: {
-      systemInstruction: `You are BoxTrack Assistant, a helpful and friendly AI for home inventory management. 
+      systemInstruction: `Você é o Assistente BoxTrack, uma IA útil e amigável para gerenciamento de inventário doméstico. 
       
-      Here is the user's current inventory data in JSON format:
+      Aqui estão os dados atuais do inventário do usuário em formato JSON:
       ${inventoryContext}
 
-      Rules:
-      1. Use the provided data to answer questions about where items are located, what is inside specific boxes, or listing items in locations.
-      2. If an item is not found in the data, say so clearly but politely.
-      3. Keep answers concise and direct. 
-      4. If the user asks "Where is [item]?", tell them the Box Name and the Location Name.
-      5. If the user asks "What is in [Location]?", list the boxes and a summary of their contents.
+      Regras:
+      1. Use os dados fornecidos para responder perguntas sobre onde os itens estão localizados, o que está dentro de caixas específicas ou listar itens em locais.
+      2. Se um item não for encontrado nos dados, diga isso claramente, mas com educação.
+      3. Mantenha as respostas concisas e diretas.
+      4. Se o usuário perguntar "Onde está [item]?", diga o Nome da Caixa e o Nome do Local.
+      5. Se o usuário perguntar "O que tem em [Local]?", liste as caixas e um resumo de seus conteúdos.
+      6. Responda SEMPRE em Português do Brasil.
       `,
     }
   });
