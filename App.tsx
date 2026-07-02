@@ -460,7 +460,11 @@ const LocationsPage = () => {
           </div>
         ) : (
           locations.map(loc => (
-            <div key={loc.id} className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
+            <button
+              key={loc.id}
+              onClick={() => navigate(`/locations/${loc.id}/edit`)}
+              className="w-full text-left bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm transition-all hover:border-emerald-400 hover:shadow-md"
+            >
               <div className="flex items-center gap-2 mb-1">
                 <MapPin size={20} className="text-emerald-500" />
                 <h3 className="font-semibold text-gray-900 dark:text-white">{loc.name}</h3>
@@ -468,13 +472,13 @@ const LocationsPage = () => {
               {loc.description && (
                 <p className="text-gray-600 dark:text-gray-400 text-sm">{loc.description}</p>
               )}
-            </div>
+            </button>
           ))
         )}
       </div>
 
       <button
-        onClick={() => navigate('/location/new')}
+        onClick={() => navigate('/locations/new')}
         className="fixed right-6 bottom-24 shadow-lg shadow-emerald-500/30 bg-emerald-600 text-white p-4 rounded-full active:scale-95 transition-all z-30 hover:bg-emerald-700"
       >
         <Plus size={24} />
@@ -483,6 +487,121 @@ const LocationsPage = () => {
   );
 };
 
+const ManageLocationPage = () => {
+  const { id } = useParams<{ id?: string }>();
+  const navigate = useNavigate();
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(Boolean(id && id !== 'new'));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isEditing = Boolean(id && id !== 'new');
+
+  useEffect(() => {
+    if (!isEditing) {
+      setLoading(false);
+      return;
+    }
+
+    const loadLocation = async () => {
+      try {
+        const data = await storage.getLocationById(id!);
+        if (data) {
+          setName(data.name);
+          setDescription(data.description || '');
+        }
+      } catch (error) {
+        console.error('Failed to load location', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadLocation();
+  }, [id, isEditing]);
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    setIsSubmitting(true);
+    try {
+      if (isEditing && id) {
+        await storage.updateLocation({ id, name, description });
+      } else {
+        await storage.addLocation({ name, description });
+      }
+      navigate('/locations');
+    } catch (error) {
+      console.error('Failed to save location', error);
+      alert('Failed to save location');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id || !isEditing || !confirm('Delete this location?')) return;
+    setIsSubmitting(true);
+    try {
+      await storage.deleteLocation(id);
+      navigate('/locations');
+    } catch (error) {
+      console.error('Failed to delete location', error);
+      alert('Failed to delete location');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (loading) return <PageLoader />;
+
+  return (
+    <div className="pb-safe min-h-screen bg-white dark:bg-gray-950">
+      <Header title={isEditing ? 'Edit Location' : 'New Location'} backTo="/locations" action={isEditing ? (
+        <button onClick={handleDelete} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-full transition-colors">
+          <Trash2 size={20} />
+        </button>
+      ) : undefined} />
+
+      <div className="p-4 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+          <input
+            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-emerald-500 dark:text-white"
+            placeholder="e.g. Garage"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+          <textarea
+            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-emerald-500 min-h-[100px] resize-none dark:text-white"
+            placeholder="Optional details..."
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </div>
+
+        <div className="pt-4 flex gap-3">
+          <button
+            onClick={() => navigate('/locations')}
+            className="flex-1 py-3 text-gray-600 dark:text-gray-400 font-medium hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim() || isSubmitting}
+            className="flex-1 py-3 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Create Location'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AddBoxPage = () => {
   const navigate = useNavigate();
@@ -1170,6 +1289,8 @@ const MainApp = () => {
         <Route path="/item/:id" element={<EditItemPage />} />
         <Route path="/box/:id/print" element={<BoxLabelPage />} />
         <Route path="/locations" element={<LocationsPage />} />
+        <Route path="/locations/new" element={<ManageLocationPage />} />
+        <Route path="/locations/:id/edit" element={<ManageLocationPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/chat" element={<AssistantChat />} />
         <Route path="*" element={<Navigate to="/" />} />

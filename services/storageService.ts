@@ -1,11 +1,16 @@
 import { Location, Box, Item, AppData } from "../types";
-import { supabase } from "./supabaseClient";
+import { localApi } from "./localApiClient";
 
-// Helper to get current user ID
-const getCurrentUserId = async (): Promise<string> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("User not authenticated");
-  return user.id;
+const getCurrentUserId = (): string => {
+  if (typeof window === 'undefined') return 'local-user';
+  const stored = window.localStorage.getItem('boxtrack-local-auth');
+  if (!stored) return 'local-user';
+  try {
+    const parsed = JSON.parse(stored) as { id?: string };
+    return parsed.id || 'local-user';
+  } catch {
+    return 'local-user';
+  }
 };
 
 // Helpers to map Database (snake_case) to App (camelCase)
@@ -38,209 +43,126 @@ const mapItem = (row: any): Item => ({
 // --- LOCATIONS ---
 
 export const getLocations = async (): Promise<Location[]> => {
-  // RLS on the server will automatically filter this, but explicit filtering is safe
-  const { data, error } = await supabase
-    .from('locations')
-    .select('*')
-    .order('created_at', { ascending: true });
-
-  if (error) throw error;
-  return data.map(mapLocation);
+  const rows = await localApi.get<any[]>('/locations');
+  return rows.map(mapLocation);
 };
 
 export const addLocation = async (location: Omit<Location, 'id'>): Promise<Location> => {
-  const userId = await getCurrentUserId();
+  const userId = getCurrentUserId();
+  const row = await localApi.post<any>('/locations', {
+    id: crypto.randomUUID(),
+    name: location.name,
+    description: location.description,
+    user_id: userId,
+  });
+  return mapLocation(row);
+};
 
-  const { data, error } = await supabase
-    .from('locations')
-    .insert({
-      name: location.name,
-      description: location.description,
-      user_id: userId
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapLocation(data);
+export const updateLocation = async (location: Location): Promise<Location> => {
+  const row = await localApi.put<any>(`/locations/${location.id}`, {
+    name: location.name,
+    description: location.description,
+  });
+  return mapLocation(row);
 };
 
 export const deleteLocation = async (locationId: string): Promise<void> => {
-  const { error } = await supabase
-    .from('locations')
-    .delete()
-    .eq('id', locationId);
-
-  if (error) throw error;
+  await localApi.delete(`/locations/${locationId}`);
 };
 
 export const getLocationById = async (id: string): Promise<Location | undefined> => {
-  const { data, error } = await supabase
-    .from('locations')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error) return undefined;
-  return mapLocation(data);
+  const rows = await localApi.get<any[]>('/locations');
+  const row = rows.find((item) => item.id === id);
+  return row ? mapLocation(row) : undefined;
 };
 
 // --- BOXES ---
 
 export const getBoxes = async (): Promise<Box[]> => {
-  const { data, error } = await supabase
-    .from('boxes')
-    .select('*')
-    .order('created_at', { ascending: true });
-
-  if (error) throw error;
-  return data.map(mapBox);
+  const rows = await localApi.get<any[]>('/boxes');
+  return rows.map(mapBox);
 };
 
 export const getBoxById = async (id: string): Promise<Box | undefined> => {
-  const { data, error } = await supabase
-    .from('boxes')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error) return undefined;
-  return mapBox(data);
+  const rows = await localApi.get<any[]>('/boxes');
+  const row = rows.find((item) => item.id === id);
+  return row ? mapBox(row) : undefined;
 };
 
 export const addBox = async (box: Omit<Box, 'id'>): Promise<Box> => {
-  const userId = await getCurrentUserId();
-
-  const { data, error } = await supabase
-    .from('boxes')
-    .insert({
-      name: box.name,
-      description: box.description,
-      location_id: box.locationId, // Mapping to DB column
-      user_id: userId
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapBox(data);
+  const userId = getCurrentUserId();
+  const row = await localApi.post<any>('/boxes', {
+    id: crypto.randomUUID(),
+    name: box.name,
+    description: box.description,
+    location_id: box.locationId,
+    user_id: userId,
+  });
+  return mapBox(row);
 };
 
 export const updateBox = async (updatedBox: Box): Promise<Box> => {
-  const { data, error } = await supabase
-    .from('boxes')
-    .update({
-      name: updatedBox.name,
-      description: updatedBox.description,
-      location_id: updatedBox.locationId
-    })
-    .eq('id', updatedBox.id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapBox(data);
+  const row = await localApi.put<any>(`/boxes/${updatedBox.id}`, {
+    name: updatedBox.name,
+    description: updatedBox.description,
+    location_id: updatedBox.locationId,
+  });
+  return mapBox(row);
 };
 
 export const deleteBox = async (boxId: string): Promise<void> => {
-  const { error } = await supabase
-    .from('boxes')
-    .delete()
-    .eq('id', boxId);
-
-  if (error) throw error;
+  await localApi.delete(`/boxes/${boxId}`);
 };
 
 // --- ITEMS ---
 
 export const getItems = async (): Promise<Item[]> => {
-  const { data, error } = await supabase
-    .from('items')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data.map(mapItem);
+  const rows = await localApi.get<any[]>('/items');
+  return rows.map(mapItem);
 };
 
 export const getItemsByBox = async (boxId: string): Promise<Item[]> => {
-  const { data, error } = await supabase
-    .from('items')
-    .select('*')
-    .eq('box_id', boxId)
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data.map(mapItem);
+  const rows = await localApi.get<any[]>(`/items/box/${boxId}`);
+  return rows.map(mapItem);
 };
 
 export const getItemById = async (itemId: string): Promise<Item | undefined> => {
-  const { data, error } = await supabase
-    .from('items')
-    .select('*')
-    .eq('id', itemId)
-    .single();
-
-  if (error) return undefined;
-  return mapItem(data);
+  const rows = await localApi.get<any[]>('/items');
+  const row = rows.find((item) => item.id === itemId);
+  return row ? mapItem(row) : undefined;
 };
 
 export const addItem = async (item: Omit<Item, 'id' | 'createdAt'>): Promise<Item> => {
-  const userId = await getCurrentUserId();
-
-  const { data, error } = await supabase
-    .from('items')
-    .insert({
-      box_id: item.boxId,
-      name: item.name,
-      description: item.description,
-      material: item.material,
-      color: item.color,
-      user_id: userId
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapItem(data);
+  const userId = getCurrentUserId();
+  const row = await localApi.post<any>('/items', {
+    id: crypto.randomUUID(),
+    box_id: item.boxId,
+    name: item.name,
+    description: item.description,
+    material: item.material,
+    color: item.color,
+    user_id: userId,
+  });
+  return mapItem(row);
 };
 
 export const updateItem = async (updatedItem: Item): Promise<Item> => {
-  const { data, error } = await supabase
-    .from('items')
-    .update({
-      name: updatedItem.name,
-      description: updatedItem.description,
-      material: updatedItem.material,
-      color: updatedItem.color,
-    })
-    .eq('id', updatedItem.id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapItem(data);
+  const row = await localApi.put<any>(`/items/${updatedItem.id}`, {
+    name: updatedItem.name,
+    description: updatedItem.description,
+    material: updatedItem.material,
+    color: updatedItem.color,
+  });
+  return mapItem(row);
 };
 
 export const moveItem = async (itemId: string, newBoxId: string): Promise<Item> => {
-  const { data, error } = await supabase
-    .from('items')
-    .update({ box_id: newBoxId })
-    .eq('id', itemId)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapItem(data);
+  const row = await localApi.put<any>(`/items/${itemId}/move`, { box_id: newBoxId });
+  return mapItem(row);
 };
 
 export const deleteItem = async (itemId: string): Promise<void> => {
-  const { error } = await supabase
-    .from('items')
-    .delete()
-    .eq('id', itemId);
-
-  if (error) throw error;
+  await localApi.delete(`/items/${itemId}`);
 };
 
 // --- DATA MANAGEMENT (Backup/Restore) ---
@@ -260,8 +182,17 @@ export const getExportData = async (): Promise<AppData> => {
 };
 
 export const importData = async (data: AppData): Promise<{ success: boolean }> => {
-  console.warn("Bulk import is disabled for Supabase version to prevent data conflicts.");
-  return { success: false };
+  try {
+    await Promise.all([
+      ...data.locations.map((location) => addLocation(location)),
+      ...data.boxes.map((box) => addBox(box)),
+      ...data.items.map((item) => addItem(item)),
+    ]);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to import data locally', error);
+    return { success: false };
+  }
 };
 
 export const generateHumanReadableInventory = async (): Promise<string> => {
