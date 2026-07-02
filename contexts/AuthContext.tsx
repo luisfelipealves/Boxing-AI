@@ -1,60 +1,75 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../services/supabaseClient';
+
+interface LocalUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+interface LocalSession {
+  user: LocalUser;
+}
 
 interface AuthContextType {
-  session: Session | null;
-  user: User | null;
+  session: LocalSession | null;
+  user: LocalUser | null;
   loading: boolean;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
 }
 
+const AUTH_STORAGE_KEY = 'boxtrack-local-auth';
+
+const createLocalUser = (): LocalUser => ({
+  id: 'local-user',
+  email: 'local@boxtrack.local',
+  name: 'Local user',
+});
+
+const readStoredUser = (): LocalUser | null => {
+  if (typeof window === 'undefined') return null;
+
+  const stored = window.localStorage.getItem(AUTH_STORAGE_KEY);
+  if (!stored) return null;
+
+  try {
+    return JSON.parse(stored) as LocalUser;
+  } catch {
+    return null;
+  }
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: React.PropsWithChildren) => {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<LocalSession | null>(null);
+  const [user, setUser] = useState<LocalUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check active session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    // Listen for changes (login, logout, refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    const storedUser = readStoredUser();
+    if (storedUser) {
+      setSession({ user: storedUser });
+      setUser(storedUser);
+    }
+    setLoading(false);
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    }
+    setSession(null);
+    setUser(null);
   };
 
   const signInWithGoogle = async () => {
-    try {
-      const currentOrigin = window.location.origin;
-      console.log("Attempting Google Auth redirect to:", currentOrigin);
-      
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: currentOrigin,
-        },
-      });
-      if (error) throw error;
-    } catch (error: any) {
-      console.error("Error logging in with Google:", error);
-      alert(`Login failed: ${error.message || error}\n\nIMPORTANT: Ensure "${window.location.origin}" is added to 'Redirect URLs' in your Supabase Auth settings.`);
+    const localUser = createLocalUser();
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(localUser));
     }
+    setSession({ user: localUser });
+    setUser(localUser);
   };
 
   return (
