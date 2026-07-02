@@ -3,7 +3,7 @@ const normalizeApiUrl = (value: string | undefined): string | undefined => {
   return value.replace(/\/$/, '');
 };
 
-const resolveApiUrl = (): string => {
+export const resolveApiUrl = (): string => {
   const fromEnv = typeof import.meta !== 'undefined'
     ? normalizeApiUrl((import.meta as any).env?.VITE_API_URL)
     : undefined;
@@ -12,7 +12,14 @@ const resolveApiUrl = (): string => {
     ? normalizeApiUrl(process.env?.VITE_API_URL)
     : undefined;
 
-  return fromEnv || fromProcess || 'http://localhost:3001';
+  if (fromEnv) return fromEnv;
+  if (fromProcess) return fromProcess;
+
+  if (typeof window !== 'undefined') {
+    return '/api';
+  }
+
+  return '/api';
 };
 
 const API_URL = resolveApiUrl();

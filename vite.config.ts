@@ -34,6 +34,15 @@ export default defineConfig(({ mode }) => {
       'process.env.API_KEY': JSON.stringify(env.API_KEY),
       'process.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL)
     },
+    server: {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+          secure: false,
+        },
+      },
+    },
     test: {
       environment: 'jsdom',
       globals: true,
