@@ -183,7 +183,11 @@ const getUserId = (req) => {
   return body.user_id || body.userId || 'local-user';
 };
 
-const createApp = async (store = await createDataStore()) => {
+const createApp = async (store) => {
+  if (!store) {
+    store = await createDataStore();
+  }
+
   const app = express();
 
   app.use(cors());
