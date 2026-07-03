@@ -9,8 +9,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT || 3001);
 const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data', 'boxtrack.sqlite');
-const API_PREFIX = '/api';
-
 const createMemoryStore = () => {
   const state = {
     locations: [],
@@ -189,18 +187,19 @@ const createApp = async (store) => {
   }
 
   const app = express();
+  const apiRouter = express.Router();
 
   app.use(cors());
   app.use(express.json());
   app.locals.store = store;
 
-  app.get(`${API_PREFIX}/health`, (req, res) => res.json({ ok: true, database: req.app.locals.store.kind || 'memory' }));
+  apiRouter.get('/health', (req, res) => res.json({ ok: true, database: req.app.locals.store.kind || 'memory' }));
 
-  app.get(`${API_PREFIX}/locations`, (req, res) => {
+  apiRouter.get('/locations', (req, res) => {
     res.json(req.app.locals.store.getLocations());
   });
 
-  app.get(`${API_PREFIX}/locations/:id`, (req, res) => {
+  apiRouter.get('/locations/:id', (req, res) => {
     const location = req.app.locals.store.getLocation(req.params.id);
     if (!location) {
       res.status(404).json({ error: 'Location not found' });
@@ -209,7 +208,7 @@ const createApp = async (store) => {
     res.json(location);
   });
 
-  app.post(`${API_PREFIX}/locations`, (req, res) => {
+  apiRouter.post('/locations', (req, res) => {
     const body = parseBody(req);
     const id = body.id || randomUUID();
     const userId = getUserId(req);
@@ -229,67 +228,86 @@ const createApp = async (store) => {
     }
   });
 
-  app.put(`${API_PREFIX}/locations/:id`, (req, res) => {
+  apiRouter.put('/locations/:id', (req, res) => {
     const { name, description } = parseBody(req);
     const updated = req.app.locals.store.updateLocation(req.params.id, { name, description });
     res.json(updated);
   });
 
-  app.delete(`${API_PREFIX}/locations/:id`, (req, res) => {
+  apiRouter.delete('/locations/:id', (req, res) => {
     req.app.locals.store.deleteLocation(req.params.id);
     res.status(204).send();
   });
 
-  app.get(`${API_PREFIX}/boxes`, (req, res) => {
+  apiRouter.get('/boxes', (req, res) => {
     res.json(req.app.locals.store.getBoxes());
   });
 
-  app.post(`${API_PREFIX}/boxes`, (req, res) => {
+  apiRouter.post('/boxes', (req, res) => {
     const { id, user_id, location_id, name, description } = parseBody(req);
     const created = req.app.locals.store.createBox({ id, user_id, location_id, name, description, created_at: Date.now() });
     res.status(201).json(created);
   });
 
-  app.put(`${API_PREFIX}/boxes/:id`, (req, res) => {
+  apiRouter.put('/boxes/:id', (req, res) => {
     const { location_id, name, description } = parseBody(req);
     const updated = req.app.locals.store.updateBox(req.params.id, { location_id, name, description });
     res.json(updated);
   });
 
-  app.delete(`${API_PREFIX}/boxes/:id`, (req, res) => {
+  apiRouter.delete('/boxes/:id', (req, res) => {
     req.app.locals.store.deleteBox(req.params.id);
     res.status(204).send();
   });
 
-  app.get(`${API_PREFIX}/items`, (req, res) => {
+  apiRouter.get('/items', (req, res) => {
     res.json(req.app.locals.store.getItems());
   });
 
-  app.get(`${API_PREFIX}/items/box/:boxId`, (req, res) => {
+  apiRouter.get('/items/box/:boxId', (req, res) => {
     res.json(req.app.locals.store.getItemsByBox(req.params.boxId));
   });
 
-  app.post(`${API_PREFIX}/items`, (req, res) => {
+  apiRouter.post('/items', (req, res) => {
     const { id, user_id, box_id, name, description, material, color } = parseBody(req);
     const created = req.app.locals.store.createItem({ id, user_id, box_id, name, description, material, color, created_at: Date.now() });
     res.status(201).json(created);
   });
 
-  app.put(`${API_PREFIX}/items/:id`, (req, res) => {
+  apiRouter.put('/items/:id', (req, res) => {
     const { name, description, material, color } = parseBody(req);
     const updated = req.app.locals.store.updateItem(req.params.id, { name, description, material, color });
     res.json(updated);
   });
 
-  app.put(`${API_PREFIX}/items/:id/move`, (req, res) => {
+  apiRouter.put('/items/:id/move', (req, res) => {
     const { box_id } = parseBody(req);
     const updated = req.app.locals.store.moveItem(req.params.id, box_id);
     res.json(updated);
   });
 
-  app.delete(`${API_PREFIX}/items/:id`, (req, res) => {
+  apiRouter.delete('/items/:id', (req, res) => {
     req.app.locals.store.deleteItem(req.params.id);
     res.status(204).send();
+  });
+
+  app.use('/api', apiRouter);
+  app.use(apiRouter);
+
+  apiRouter.use((err, req, res, next) => {
+    console.error('API Router Error:', err);
+    if (res.headersSent) {
+      return next(err);
+    }
+    res.status(500).json({ error: err?.message || 'Internal Server Error' });
+  });
+
+  app.use((err, req, res, next) => {
+    console.error('Express App Error:', err);
+    if (res.headersSent) {
+      return next(err);
+    }
+    res.status(500).json({ error: err?.message || 'Internal Server Error' });
   });
 
   app.get('*', (_req, res) => {
