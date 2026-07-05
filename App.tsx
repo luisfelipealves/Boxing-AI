@@ -603,36 +603,69 @@ const ManageLocationPage = () => {
   );
 };
 
-const AddBoxPage = () => {
+export const AddBoxPage = () => {
+  const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [locationId, setLocationId] = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(Boolean(id && id !== 'new'));
 
   // Inline Location Creation State
   const [isCreatingLocation, setIsCreatingLocation] = useState(false);
   const [newLocName, setNewLocName] = useState('');
   const [newLocDesc, setNewLocDesc] = useState('');
+  const isEditing = Boolean(id && id !== 'new');
 
   useEffect(() => {
-    storage.getLocations().then(setLocations);
-  }, []);
+    const loadData = async () => {
+      try {
+        const [locationsData, boxData] = await Promise.all([
+          storage.getLocations(),
+          isEditing && id ? storage.getBoxById(id) : Promise.resolve(undefined)
+        ]);
+
+        setLocations(locationsData);
+        if (isEditing && boxData) {
+          setName(boxData.name);
+          setDescription(boxData.description || '');
+          setLocationId(boxData.locationId || '');
+        }
+      } catch (error) {
+        console.error("Failed to load box data", error);
+        alert("Failed to load box data");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [id, isEditing]);
 
   const handleSubmit = async () => {
     if (!name.trim() || !locationId) return;
     setIsSubmitting(true);
     try {
-      await storage.addBox({
-        name,
-        description,
-        locationId
-      });
+      if (isEditing && id) {
+        await storage.updateBox({
+          id,
+          locationId,
+          name,
+          description,
+        });
+      } else {
+        await storage.addBox({
+          name,
+          description,
+          locationId
+        });
+      }
       navigate('/');
     } catch (error) {
-      console.error("Failed to add box", error);
-      alert("Failed to create box");
+      console.error("Failed to save box", error);
+      alert(isEditing ? "Failed to update box" : "Failed to create box");
     } finally {
       setIsSubmitting(false);
     }
@@ -657,9 +690,11 @@ const AddBoxPage = () => {
     }
   };
 
+  if (loading) return <PageLoader />;
+
   return (
     <div className="pb-safe min-h-screen bg-white dark:bg-gray-950">
-      <Header title="New Box" backTo="/" />
+      <Header title={isEditing ? 'Edit Box' : 'New Box'} backTo={isEditing ? (id ? `/box/${id}` : '/') : '/'} />
 
       <div className="p-4 space-y-4">
         <div>
@@ -708,7 +743,7 @@ const AddBoxPage = () => {
 
           <div className="pt-4 flex gap-3">
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate(isEditing && id ? `/box/${id}` : '/')}
               className="flex-1 py-3 text-gray-600 dark:text-gray-400 font-medium hover:bg-gray-50 dark:hover:bg-gray-900 rounded-xl transition-colors"
             >
               Cancel
@@ -718,7 +753,7 @@ const AddBoxPage = () => {
               disabled={!name.trim() || !locationId || isSubmitting}
               className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none"
             >
-              {isSubmitting ? 'Creating...' : 'Create Box'}
+              {isSubmitting ? (isEditing ? 'Saving...' : 'Creating...') : (isEditing ? 'Save Changes' : 'Create Box')}
             </button>
           </div>
         </div>
@@ -1273,7 +1308,7 @@ const SettingsPage = () => {
   );
 };
 
-const MainApp = () => {
+export const MainApp = () => {
   const { user, loading } = useAuth();
 
   if (loading) return <PageLoader />;
@@ -1284,6 +1319,7 @@ const MainApp = () => {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/box/new" element={<AddBoxPage />} />
+        <Route path="/box/:id/edit" element={<AddBoxPage />} />
         <Route path="/box/:id" element={<BoxDetailsPage />} />
         <Route path="/box/:id/add-item" element={<AddItemPage />} />
         <Route path="/item/:id" element={<EditItemPage />} />
