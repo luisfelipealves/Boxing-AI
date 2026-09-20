@@ -34,7 +34,6 @@ import {
   Check,
   FilePenLine,
   RefreshCw,
-  LogOut,
   User
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
@@ -47,8 +46,6 @@ import { Location, Box, Item } from './types';
 import * as storage from './services/storageService';
 import { analyzeItemImage, analyzeItemAudio, createInventoryChat } from './services/geminiService';
 
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { LoginPage } from './components/LoginPage';
 
 // --- UI COMPONENTS ---
 
@@ -1262,7 +1259,6 @@ const BoxLabelPage = () => {
 };
 
 const SettingsPage = () => {
-  const { user, signOut } = useAuth();
   const navigate = useNavigate();
 
   return (
@@ -1274,15 +1270,8 @@ const SettingsPage = () => {
           <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-4">
             <User size={32} />
           </div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Account</h2>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">{user?.email}</p>
-
-          <button
-            onClick={signOut}
-            className="w-full py-3 px-4 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 rounded-xl font-medium hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-2"
-          >
-            <LogOut size={20} /> Sign Out
-          </button>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Armazenamento local</h2>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">Os seus dados ficam guardados neste navegador.</p>
         </div>
 
         <div className="space-y-2">
@@ -1309,11 +1298,6 @@ const SettingsPage = () => {
 };
 
 export const MainApp = () => {
-  const { user, loading } = useAuth();
-
-  if (loading) return <PageLoader />;
-  if (!user) return <LoginPage />;
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
       <Routes>
@@ -1338,11 +1322,9 @@ export const MainApp = () => {
 
 // Fixed missing default export
 const App = () => (
-  <AuthProvider>
-    <HashRouter>
-      <MainApp />
-    </HashRouter>
-  </AuthProvider>
+  <HashRouter>
+    <MainApp />
+  </HashRouter>
 );
 
 export default App;

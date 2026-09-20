@@ -66,15 +66,7 @@ const saveDbToIndexedDB = (data: Uint8Array): Promise<void> => {
 };
 
 const getCurrentUserId = (): string => {
-  if (typeof window === 'undefined' || !window.localStorage) return 'local-user';
-  const stored = window.localStorage.getItem('boxtrack-local-auth');
-  if (!stored) return 'local-user';
-  try {
-    const parsed = JSON.parse(stored) as { id?: string };
-    return parsed.id || 'local-user';
-  } catch {
-    return 'local-user';
-  }
+  return 'local-user';
 };
 
 let dbInstance: Database | null = null;

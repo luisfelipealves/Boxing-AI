@@ -11,6 +11,11 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.*
+!.env.example
+data/*.sqlite
+tmp-test.sqlite
 
 # Editor directories and files
 .vscode/*
