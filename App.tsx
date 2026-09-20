@@ -45,6 +45,7 @@ import { Chat, GenerateContentResponse } from "@google/genai";
 import { Location, Box, Item } from './types';
 import * as storage from './services/storageService';
 import { analyzeItemImage, analyzeItemAudio, createInventoryChat } from './services/geminiService';
+import { getGeminiApiKey, setStoredGeminiApiKey } from './services/geminiKeyService';
 
 
 // --- UI COMPONENTS ---
@@ -75,6 +76,86 @@ const ErrorDisplay = ({ message, onRetry }: { message: string; onRetry?: () => v
     </div>
   </div>
 );
+
+const GeminiKeySetup = ({ onComplete }: { onComplete: () => void }) => {
+  const [apiKey, setApiKey] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSave = () => {
+    const normalizedApiKey = apiKey.trim();
+    if (!normalizedApiKey) {
+      setError('Informe uma chave válida para continuar.');
+      return;
+    }
+
+    if (!setStoredGeminiApiKey(normalizedApiKey)) {
+      setError('Não foi possível guardar a chave neste dispositivo.');
+      return;
+    }
+    onComplete();
+  };
+
+  const handleSkip = () => {
+    try {
+      window.sessionStorage.setItem('boxtrack.gemini.key-skipped', 'true');
+    } catch {
+      // Ignore session storage errors.
+    }
+    onComplete();
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xl p-6">
+        <div className="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4">
+          <Sparkles size={24} />
+        </div>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Configure o Gemini</h1>
+        <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed mb-5">
+          Não foi encontrada uma chave no ambiente. Informe a sua chave Gemini para ativar o assistente, o reconhecimento por voz e a análise de imagens.
+        </p>
+
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" htmlFor="gemini-api-key">
+          Chave da API Gemini
+        </label>
+        <input
+          id="gemini-api-key"
+          type="password"
+          autoComplete="off"
+          value={apiKey}
+          onChange={event => {
+            setApiKey(event.target.value);
+            setError('');
+          }}
+          onKeyDown={event => event.key === 'Enter' && handleSave()}
+          placeholder="AIza..."
+          className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+        />
+        {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+        <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+          A chave será guardada apenas neste dispositivo. Ela pode ser lida pela aplicação, portanto não use uma chave com permissões ou limites que não esteja disposto a expor.
+        </p>
+
+        <div className="mt-6 flex gap-3">
+          <button
+            onClick={handleSkip}
+            className="flex-1 py-3 text-gray-600 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
+          >
+            Continuar sem IA
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!apiKey.trim()}
+            className="flex-1 py-3 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Guardar chave
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 
 const AudioWaveform = ({ stream }: { stream: MediaStream }) => {
@@ -1320,10 +1401,32 @@ export const MainApp = () => {
   );
 };
 
+const GeminiKeyGate = () => {
+  const [isChecking, setIsChecking] = useState(true);
+  const [needsKey, setNeedsKey] = useState(false);
+
+  useEffect(() => {
+    let skippedThisSession = false;
+    try {
+      skippedThisSession = window.sessionStorage.getItem('boxtrack.gemini.key-skipped') === 'true';
+    } catch {
+      // Ignore session storage errors.
+    }
+
+    setNeedsKey(!getGeminiApiKey() && !skippedThisSession);
+    setIsChecking(false);
+  }, []);
+
+  if (isChecking) return <PageLoader text="A carregar..." />;
+  if (needsKey) return <GeminiKeySetup onComplete={() => setNeedsKey(false)} />;
+
+  return <MainApp />;
+};
+
 // Fixed missing default export
 const App = () => (
   <HashRouter>
-    <MainApp />
+    <GeminiKeyGate />
   </HashRouter>
 );
 
