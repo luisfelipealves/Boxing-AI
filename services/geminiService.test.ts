@@ -27,6 +27,7 @@ vi.mock('@google/genai', () => {
 describe('Gemini Service', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.stubEnv('VITE_GOOGLE_GENAI_API_KEY', 'test-api-key');
         // Start with a clean slate for mocks
         mockGenerateContent.mockReset();
     });
