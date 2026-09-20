@@ -56,22 +56,14 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
-          else
-            keytool -genkeypair -v \
-              -keystore android/app/release.keystore \
-              -alias boxtrack-ci \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -storepass boxtrack-ci \
-              -keypass boxtrack-ci \
-              -dname "CN=BoxTrack CI, OU=Personal, O=BoxTrack, L=Local, S=Local, C=PT"
-            ANDROID_KEYSTORE_PASSWORD=boxtrack-ci
-            ANDROID_KEY_ALIAS=boxtrack-ci
-            ANDROID_KEY_PASSWORD=boxtrack-ci
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ] || \
+             [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || \
+             [ -z "$ANDROID_KEY_ALIAS" ] || \
+             [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "Android signing Secrets are incomplete."
+            exit 1
           fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
           cat > android/keystore.properties <<EOF
           storeFile=app/release.keystore
           storePassword=$ANDROID_KEYSTORE_PASSWORD

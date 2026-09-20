@@ -55,4 +55,4 @@ Para assinar a versão release, configure estes Secrets no GitHub:
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
 
-Sem esses Secrets, o workflow gera uma keystore temporária para testes. Para que uma nova versão possa atualizar a anterior e para publicar na Play Store, use uma keystore persistente nos Secrets.
+Esses Secrets são obrigatórios para gerar uma versão assinada. A mesma keystore deve ser mantida para que novas versões possam atualizar a instalação anterior e para publicar na Play Store.
