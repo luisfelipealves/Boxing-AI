@@ -16,6 +16,13 @@ dist-ssr
 !.env.example
 data/*.sqlite
 tmp-test.sqlite
+android/.gradle
+android/build
+android/app/build
+android/capacitor-cordova-android-plugins/build
+android/local.properties
+android/keystore.properties
+android/app/*.keystore
 
 # Editor directories and files
 .vscode/*

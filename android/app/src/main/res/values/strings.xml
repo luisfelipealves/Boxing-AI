@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BoxTrack</string>
+    <string name="title_activity_main">BoxTrack</string>
+    <string name="package_name">com.boxtrack.personal</string>
+    <string name="custom_url_scheme">com.boxtrack.personal</string>
+</resources>
