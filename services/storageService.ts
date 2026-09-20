@@ -1,7 +1,7 @@
 import { Location, Box, Item, AppData } from "../types";
 import initSqlJs, { Database } from 'sql.js';
 
-const DB_NAME = 'BoxTrackOfflineDB';
+const DB_NAME = 'BoxTrackPersonalDB';
 const STORE_NAME = 'sqlite';
 const KEY = 'database';
 
@@ -65,10 +65,6 @@ const saveDbToIndexedDB = (data: Uint8Array): Promise<void> => {
   });
 };
 
-const getCurrentUserId = (): string => {
-  return 'local-user';
-};
-
 let dbInstance: Database | null = null;
 let initPromise: Promise<Database> | null = null;
 
@@ -76,7 +72,6 @@ const createSchema = (db: Database) => {
   db.run(`
     CREATE TABLE IF NOT EXISTS locations (
       id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT,
       created_at INTEGER NOT NULL
@@ -84,7 +79,6 @@ const createSchema = (db: Database) => {
 
     CREATE TABLE IF NOT EXISTS boxes (
       id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
       location_id TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT,
@@ -93,7 +87,6 @@ const createSchema = (db: Database) => {
 
     CREATE TABLE IF NOT EXISTS items (
       id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
       box_id TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT,
@@ -162,14 +155,12 @@ export const closeDatabase = () => {
 // Helpers to map Database (snake_case) to App (camelCase)
 const mapLocation = (row: any): Location => ({
   id: row.id,
-  user_id: row.user_id,
   name: row.name,
   description: row.description || undefined,
 });
 
 const mapBox = (row: any): Box => ({
   id: row.id,
-  user_id: row.user_id,
   locationId: row.location_id,
   name: row.name,
   description: row.description || undefined,
@@ -177,7 +168,6 @@ const mapBox = (row: any): Box => ({
 
 const mapItem = (row: any): Item => ({
   id: row.id,
-  user_id: row.user_id,
   boxId: row.box_id,
   name: row.name,
   description: row.description || undefined,
@@ -224,16 +214,14 @@ export const getLocations = async (): Promise<Location[]> => {
 };
 
 export const addLocation = async (location: Omit<Location, 'id'>): Promise<Location> => {
-  const userId = getCurrentUserId();
   const id = crypto.randomUUID();
   const createdAt = Date.now();
   await executeRun(
-    'INSERT INTO locations (id, user_id, name, description, created_at) VALUES (?, ?, ?, ?, ?)',
-    [id, userId, location.name, location.description || null, createdAt]
+    'INSERT INTO locations (id, name, description, created_at) VALUES (?, ?, ?, ?)',
+    [id, location.name, location.description || null, createdAt]
   );
   return {
     id,
-    user_id: userId,
     name: location.name,
     description: location.description,
   };
@@ -269,16 +257,14 @@ export const getBoxById = async (id: string): Promise<Box | undefined> => {
 };
 
 export const addBox = async (box: Omit<Box, 'id'>): Promise<Box> => {
-  const userId = getCurrentUserId();
   const id = crypto.randomUUID();
   const createdAt = Date.now();
   await executeRun(
-    'INSERT INTO boxes (id, user_id, location_id, name, description, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, userId, box.locationId, box.name, box.description || null, createdAt]
+    'INSERT INTO boxes (id, location_id, name, description, created_at) VALUES (?, ?, ?, ?, ?)',
+    [id, box.locationId, box.name, box.description || null, createdAt]
   );
   return {
     id,
-    user_id: userId,
     locationId: box.locationId,
     name: box.name,
     description: box.description,
@@ -315,16 +301,14 @@ export const getItemById = async (itemId: string): Promise<Item | undefined> => 
 };
 
 export const addItem = async (item: Omit<Item, 'id' | 'createdAt'>): Promise<Item> => {
-  const userId = getCurrentUserId();
   const id = crypto.randomUUID();
   const createdAt = Date.now();
   await executeRun(
-    'INSERT INTO items (id, user_id, box_id, name, description, material, color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    [id, userId, item.boxId, item.name, item.description || null, item.material || null, item.color || null, createdAt]
+    'INSERT INTO items (id, box_id, name, description, material, color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [id, item.boxId, item.name, item.description || null, item.material || null, item.color || null, createdAt]
   );
   return {
     id,
-    user_id: userId,
     boxId: item.boxId,
     name: item.name,
     description: item.description,
@@ -383,25 +367,23 @@ export const importData = async (data: AppData): Promise<{ success: boolean }> =
       db.run("DELETE FROM boxes");
       db.run("DELETE FROM items");
 
-      const userId = getCurrentUserId();
       for (const loc of data.locations) {
         db.run(
-          'INSERT INTO locations (id, user_id, name, description, created_at) VALUES (?, ?, ?, ?, ?)',
-          [loc.id, loc.user_id || userId, loc.name, loc.description || null, Date.now()]
+          'INSERT INTO locations (id, name, description, created_at) VALUES (?, ?, ?, ?)',
+          [loc.id, loc.name, loc.description || null, Date.now()]
         );
       }
       for (const box of data.boxes) {
         db.run(
-          'INSERT INTO boxes (id, user_id, location_id, name, description, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          [box.id, box.user_id || userId, box.locationId, box.name, box.description || null, Date.now()]
+          'INSERT INTO boxes (id, location_id, name, description, created_at) VALUES (?, ?, ?, ?, ?)',
+          [box.id, box.locationId, box.name, box.description || null, Date.now()]
         );
       }
       for (const item of data.items) {
         db.run(
-          'INSERT INTO items (id, user_id, box_id, name, description, material, color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO items (id, box_id, name, description, material, color, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
           [
             item.id,
-            item.user_id || userId,
             item.boxId,
             item.name,
             item.description || null,

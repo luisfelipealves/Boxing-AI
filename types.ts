@@ -1,13 +1,11 @@
 export interface Location {
   id: string;
-  user_id?: string;
   name: string;
   description?: string;
 }
 
 export interface Box {
   id: string;
-  user_id?: string;
   locationId: string;
   name: string;
   description?: string;
@@ -15,7 +13,6 @@ export interface Box {
 
 export interface Item {
   id: string;
-  user_id?: string;
   boxId: string;
   name: string;
   description?: string;
