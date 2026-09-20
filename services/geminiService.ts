@@ -1,13 +1,14 @@
 
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { AIAnalysisResult } from "../types";
+import { getGeminiApiKey } from "./geminiKeyService";
 
 // Always use a named parameter for API key initialization
 const getAiClient = () => {
-  const apiKey = import.meta.env.VITE_GOOGLE_GENAI_API_KEY;
+  const apiKey = getGeminiApiKey();
   if (!apiKey) {
     console.error("API_KEY is missing");
-    throw new Error("API Key is missing. Please set the VITE_GOOGLE_GENAI_API_KEY environment variable.");
+    throw new Error("API Key is missing. Configure a Gemini API key to use AI features.");
   }
   return new GoogleGenAI({ apiKey });
 };

@@ -21,7 +21,9 @@ npm install
 npm run dev
 ```
 
-O assistente de IA é opcional. Para ativá-lo, copie `.env.example` para `.env.local` e preencha `VITE_GOOGLE_GENAI_API_KEY` com uma chave própria. Essa chave fica acessível no navegador; não publique a aplicação com uma chave pessoal embutida.
+O assistente de IA é opcional. Para fornecê-la antecipadamente, copie `.env.example` para `.env.local` e preencha `VITE_GOOGLE_GENAI_API_KEY` com uma chave própria. Se essa variável não existir, a aplicação pedirá a chave ao abrir e guardará o valor apenas no armazenamento local do dispositivo.
+
+A chave fica acessível no navegador e no APK, portanto não use uma chave pessoal com limites ou permissões que não esteja disposto a expor.
 
 ## Android
 
