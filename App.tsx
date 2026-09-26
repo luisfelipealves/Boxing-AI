@@ -41,11 +41,47 @@ import { QRScanner } from './components/QRScanner';
 import { VoiceInput } from './components/VoiceInput';
 import { v4 as uuidv4 } from 'uuid';
 import { Chat, GenerateContentResponse } from "@google/genai";
+import { Capacitor, registerPlugin } from '@capacitor/core';
 
 import { Location, Box, Item } from './types';
 import * as storage from './services/storageService';
 import { analyzeItemImage, analyzeItemAudio, createInventoryChat } from './services/geminiService';
 import { getGeminiApiKey, setStoredGeminiApiKey } from './services/geminiKeyService';
+
+interface NativePrintPlugin {
+  print(): Promise<void>;
+}
+
+const NativePrint = registerPlugin<NativePrintPlugin>('NativePrint');
+
+const printLabel = async () => {
+  const platform = Capacitor.getPlatform();
+  console.info('[PRINT] button clicked');
+  console.info(`[PRINT] platform = ${platform}`);
+
+  if (platform !== 'android') {
+    console.info('[PRINT] using browser print');
+    window.print();
+    return;
+  }
+
+  if (!Capacitor.isPluginAvailable('NativePrint')) {
+    const error = new Error('NativePrint plugin is not available in the Android build');
+    console.error('[PRINT] native plugin unavailable', error);
+    alert('Printing is not available in this Android build.');
+    return;
+  }
+
+  console.info('[PRINT] native plugin available');
+  try {
+    console.info('[PRINT] calling native print');
+    await NativePrint.print();
+    console.info('[PRINT] native print started');
+  } catch (error) {
+    console.error('[PRINT] native print failed:', error);
+    alert('Unable to start printing. Check the Android print service and try again.');
+  }
+};
 
 
 // --- UI COMPONENTS ---
@@ -1293,7 +1329,7 @@ const BoxLabelPage = () => {
           ℹ️ Connect to a printer and tap the button below. This view is optimized for label printers.
         </div>
         <button
-          onClick={() => window.print()}
+          onClick={printLabel}
           className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
         >
           <Printer size={20} /> Print Label
