@@ -41,19 +41,28 @@ public class NativePrintPlugin extends Plugin {
                 return;
             }
 
-            Log.i(TAG, "[PRINT] creating print adapter from current WebView");
-            PrintDocumentAdapter adapter = webView.createPrintDocumentAdapter("BoxTrack label");
-            printManager.print(
-                    "BoxTrack label",
-                    adapter,
-                    new PrintAttributes.Builder()
-                            .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                            .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
-                            .build()
-            );
+            activity.runOnUiThread(() -> {
+                try {
+                    Log.i(TAG, "[PRINT] creating print adapter from current WebView");
+                    PrintDocumentAdapter adapter = webView.createPrintDocumentAdapter("BoxTrack label");
+                    printManager.print(
+                            "BoxTrack label",
+                            adapter,
+                            new PrintAttributes.Builder()
+                                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                                    .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                                    .build()
+                    );
 
-            Log.i(TAG, "[PRINT] Android print job submitted");
-            call.resolve();
+                    Log.i(TAG, "[PRINT] Android print job submitted");
+                    call.resolve();
+                } catch (Exception exception) {
+                    Log.e(TAG, "[PRINT] Android print failed on UI thread", exception);
+                    reject(call, exception.getMessage() == null
+                            ? "Unknown Android printing error"
+                            : exception.getMessage(), exception);
+                }
+            });
         } catch (Exception exception) {
             Log.e(TAG, "[PRINT] Android print failed", exception);
             reject(call, exception.getMessage() == null
