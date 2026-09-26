@@ -76,13 +76,17 @@ jobs:
         working-directory: android
         run: ./gradlew assembleRelease bundleRelease --no-daemon
 
+      - name: Rename APK artifact
+        shell: bash
+        run: mv android/app/build/outputs/apk/release/app-release.apk "android/app/build/outputs/apk/release/Boxing-AI-${GITHUB_REF_NAME}.apk"
+
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
           name: boxtrack-${{ github.ref_name }}-android
           if-no-files-found: error
           path: |
-            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/release/Boxing-AI-${{ github.ref_name }}.apk
             android/app/build/outputs/bundle/release/app-release.aab
 
       - name: Create GitHub Release
@@ -93,5 +97,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "BoxTrack $VERSION_NAME" \
             --generate-notes \
-            android/app/build/outputs/apk/release/app-release.apk \
+            android/app/build/outputs/apk/release/Boxing-AI-${GITHUB_REF_NAME}.apk \
             android/app/build/outputs/bundle/release/app-release.aab
