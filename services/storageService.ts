@@ -5,7 +5,7 @@ const DB_NAME = 'BoxTrackPersonalDB';
 const STORE_NAME = 'sqlite';
 const KEY = 'database';
 export const DEFAULT_CATEGORY_ID = 'caixa';
-const DEFAULT_CATEGORIES: Category[] = [
+export const DEFAULT_CATEGORIES: Category[] = [
   { id: 'caixa', name: 'Caixa' },
   { id: 'saco', name: 'Saco' },
   { id: 'mala', name: 'Mala' },

@@ -403,7 +403,7 @@ const HomePage = () => {
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [locations, setLocations] = useState<Record<string, string>>({});
   const [locationOptions, setLocationOptions] = useState<Location[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<Category[]>(storage.DEFAULT_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -420,11 +420,17 @@ const HomePage = () => {
 
   const loadData = async () => {
     try {
-      const [boxesData, locationsData, categoriesData] = await Promise.all([
+      const [boxesData, locationsData] = await Promise.all([
         storage.getBoxes(),
-        storage.getLocations(),
-        storage.getCategories()
+        storage.getLocations()
       ]);
+      let categoriesData = storage.DEFAULT_CATEGORIES;
+      try {
+        const storedCategories = await storage.getCategories();
+        if (storedCategories.length > 0) categoriesData = storedCategories;
+      } catch (error) {
+        console.error("Failed to load categories, using defaults", error);
+      }
       setBoxes(boxesData);
       setCategories(categoriesData);
       setLocationOptions(locationsData);
@@ -769,7 +775,7 @@ export const AddBoxPage = () => {
   const [locationId, setLocationId] = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [categoryId, setCategoryId] = useState(storage.DEFAULT_CATEGORY_ID);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<Category[]>(storage.DEFAULT_CATEGORIES);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(Boolean(id && id !== 'new'));
 
@@ -1005,13 +1011,19 @@ const BoxDetailsPage = () => {
   const loadData = async () => {
     if (!id) return;
     try {
-      const [boxData, itemsData, categories] = await Promise.all([
+      const [boxData, itemsData] = await Promise.all([
         storage.getBoxById(id),
-        storage.getItemsByBox(id),
-        storage.getCategories()
+        storage.getItemsByBox(id)
       ]);
       if (boxData) {
         setBox(boxData);
+        let categories = storage.DEFAULT_CATEGORIES;
+        try {
+          const storedCategories = await storage.getCategories();
+          if (storedCategories.length > 0) categories = storedCategories;
+        } catch (error) {
+          console.error("Failed to load categories, using defaults", error);
+        }
         const category = categories.find(entry => entry.id === boxData.categoryId);
         if (category) setCategoryName(category.name);
         if (boxData.locationId) {
