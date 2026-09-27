@@ -402,8 +402,12 @@ const AssistantChat = () => {
 const HomePage = () => {
   const [boxes, setBoxes] = useState<Box[]>([]);
   const [locations, setLocations] = useState<Record<string, string>>({});
+  const [locationOptions, setLocationOptions] = useState<Location[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const navigate = useNavigate();
 
@@ -416,11 +420,14 @@ const HomePage = () => {
 
   const loadData = async () => {
     try {
-      const [boxesData, locationsData] = await Promise.all([
+      const [boxesData, locationsData, categoriesData] = await Promise.all([
         storage.getBoxes(),
-        storage.getLocations()
+        storage.getLocations(),
+        storage.getCategories()
       ]);
       setBoxes(boxesData);
+      setCategories(categoriesData);
+      setLocationOptions(locationsData);
 
       const locMap: Record<string, string> = {};
       locationsData.forEach(l => locMap[l.id] = l.name);
@@ -454,9 +461,14 @@ const HomePage = () => {
   };
 
   const filteredBoxes = boxes.filter(box =>
-    box.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    box.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    (!categoryFilter || box.categoryId === categoryFilter) &&
+    (!locationFilter || box.locationId === locationFilter) &&
+    (box.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      box.description?.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const categoryNames: Record<string, string> = {};
+  categories.forEach(category => { categoryNames[category.id] = category.name; });
 
   if (loading) return <PageLoader />;
 
@@ -493,6 +505,33 @@ const HomePage = () => {
             onChange={e => setSearchTerm(e.target.value)}
           />
         </div>
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+            <select
+              aria-label="Filter by category"
+              className="w-full appearance-none bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl py-3 pl-9 pr-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-all dark:text-white text-sm"
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+            >
+              <option value="">All categories</option>
+              {categories.map(category => (
+                <option key={category.id} value={category.id}>{category.name}</option>
+              ))}
+            </select>
+          </div>
+          <select
+            aria-label="Filter by location"
+            className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl py-3 px-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-all dark:text-white text-sm"
+            value={locationFilter}
+            onChange={e => setLocationFilter(e.target.value)}
+          >
+            <option value="">All locations</option>
+            {locationOptions.map(location => (
+              <option key={location.id} value={location.id}>{location.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="px-4 space-y-3">
@@ -514,6 +553,11 @@ const HomePage = () => {
                   {box.locationId ? locations[box.locationId] || 'LOCATED' : 'UNASSIGNED'}
                 </span>
               </div>
+              {box.categoryId && (
+                <span className="inline-block text-xs font-medium text-purple-700 bg-purple-50 dark:text-purple-300 dark:bg-purple-900/30 px-2 py-1 rounded-lg mb-2">
+                  {categoryNames[box.categoryId] || box.categoryId}
+                </span>
+              )}
               {box.description && (
                 <p className="text-gray-600 dark:text-gray-400 text-sm line-clamp-2">{box.description}</p>
               )}
@@ -949,6 +993,7 @@ const BoxDetailsPage = () => {
   const navigate = useNavigate();
   const [box, setBox] = useState<Box | null>(null);
   const [locationName, setLocationName] = useState<string>('');
+  const [categoryName, setCategoryName] = useState<string>('');
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -960,12 +1005,15 @@ const BoxDetailsPage = () => {
   const loadData = async () => {
     if (!id) return;
     try {
-      const [boxData, itemsData] = await Promise.all([
+      const [boxData, itemsData, categories] = await Promise.all([
         storage.getBoxById(id),
-        storage.getItemsByBox(id)
+        storage.getItemsByBox(id),
+        storage.getCategories()
       ]);
       if (boxData) {
         setBox(boxData);
+        const category = categories.find(entry => entry.id === boxData.categoryId);
+        if (category) setCategoryName(category.name);
         if (boxData.locationId) {
           const loc = await storage.getLocationById(boxData.locationId);
           if (loc) setLocationName(loc.name);
@@ -1010,6 +1058,12 @@ const BoxDetailsPage = () => {
                 <MapPin size={14} />
                 <span className="font-medium">{locationName}</span>
               </div>
+            </>
+          )}
+          {categoryName && (
+            <>
+              <span>•</span>
+              <span className="font-medium text-purple-700 dark:text-purple-300">{categoryName}</span>
             </>
           )}
         </div>
