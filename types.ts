@@ -6,6 +6,8 @@ export interface Location {
 
 export interface Box {
   id: string;
+  /** Human-facing sequential number used on printed labels. */
+  boxNumber?: number;
   locationId: string;
   name: string;
   description?: string;

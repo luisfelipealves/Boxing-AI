@@ -79,6 +79,7 @@ const createSchema = (db: Database) => {
 
     CREATE TABLE IF NOT EXISTS boxes (
       id TEXT PRIMARY KEY,
+      box_number INTEGER,
       location_id TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT,
@@ -95,6 +96,13 @@ const createSchema = (db: Database) => {
       created_at INTEGER NOT NULL
     );
   `);
+
+  // Keep databases created before box numbers were introduced usable.
+  try {
+    db.run('ALTER TABLE boxes ADD COLUMN box_number INTEGER');
+  } catch {
+    // The column already exists.
+  }
 };
 
 export const initDatabase = async (): Promise<Database> => {
@@ -120,8 +128,9 @@ export const initDatabase = async (): Promise<Database> => {
       }
     } else {
       db = new SQL.Database();
-      createSchema(db);
     }
+
+    createSchema(db);
 
     dbInstance = db;
     return db;
@@ -161,6 +170,7 @@ const mapLocation = (row: any): Location => ({
 
 const mapBox = (row: any): Box => ({
   id: row.id,
+  boxNumber: typeof row.box_number === 'number' ? row.box_number : undefined,
   locationId: row.location_id,
   name: row.name,
   description: row.description || undefined,
@@ -259,12 +269,17 @@ export const getBoxById = async (id: string): Promise<Box | undefined> => {
 export const addBox = async (box: Omit<Box, 'id'>): Promise<Box> => {
   const id = crypto.randomUUID();
   const createdAt = Date.now();
+  const nextNumberRow = await selectOne(
+    'SELECT COALESCE(MAX(box_number), 0) + 1 AS next_box_number FROM boxes'
+  );
+  const boxNumber = Number(nextNumberRow?.next_box_number || 1);
   await executeRun(
-    'INSERT INTO boxes (id, location_id, name, description, created_at) VALUES (?, ?, ?, ?, ?)',
-    [id, box.locationId, box.name, box.description || null, createdAt]
+    'INSERT INTO boxes (id, box_number, location_id, name, description, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [id, boxNumber, box.locationId, box.name, box.description || null, createdAt]
   );
   return {
     id,
+    boxNumber,
     locationId: box.locationId,
     name: box.name,
     description: box.description,
@@ -375,8 +390,8 @@ export const importData = async (data: AppData): Promise<{ success: boolean }> =
       }
       for (const box of data.boxes) {
         db.run(
-          'INSERT INTO boxes (id, location_id, name, description, created_at) VALUES (?, ?, ?, ?, ?)',
-          [box.id, box.locationId, box.name, box.description || null, Date.now()]
+          'INSERT INTO boxes (id, box_number, location_id, name, description, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          [box.id, box.boxNumber ?? data.boxes.indexOf(box) + 1, box.locationId, box.name, box.description || null, Date.now()]
         );
       }
       for (const item of data.items) {

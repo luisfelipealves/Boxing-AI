@@ -79,6 +79,7 @@ describe('storageService local SQLite integration', () => {
     // Create
     const box = await addBox({ locationId: loc.id, name: 'Summer Clothes', description: 'T-shirts and shorts' });
     expect(box.id).toBeDefined();
+    expect(box.boxNumber).toBe(1);
     expect(box.locationId).toBe(loc.id);
     expect(box.name).toBe('Summer Clothes');
 
@@ -106,6 +107,7 @@ describe('storageService local SQLite integration', () => {
     const loc = await addLocation({ name: 'Garage' });
     const box = await addBox({ locationId: loc.id, name: 'Box 1' });
     const box2 = await addBox({ locationId: loc.id, name: 'Box 2' });
+    expect(box2.boxNumber).toBe(2);
 
     // Create
     const item = await addItem({ boxId: box.id, name: 'Hammer', description: 'Heavy tool', material: 'Steel/Wood', color: 'Brown/Grey' });
