@@ -1351,8 +1351,8 @@ const BoxLabelPage = () => {
           </div>
 
           <div className="text-center mt-4 space-y-1">
-            <p className="text-sm font-mono text-gray-500 uppercase tracking-widest">BOX ID</p>
-            <p className="font-mono font-bold text-xl">{box.id.slice(0, 8)}</p>
+            <p className="text-sm font-mono text-gray-500 uppercase tracking-widest">BOX NUMBER</p>
+            <p className="font-mono font-bold text-xl">{box.boxNumber ?? '—'}</p>
           </div>
           <div className="mt-8 pt-4 border-t-2 border-gray-100 w-full">
             <p className="text-gray-400 font-bold tracking-widest uppercase text-xs">Property of BoxTrack</p>
