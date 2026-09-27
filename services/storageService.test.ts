@@ -8,6 +8,7 @@ import {
   updateLocation, 
   deleteLocation, 
   getLocationById,
+  getCategories,
   getBoxes,
   getBoxById,
   addBox,
@@ -75,18 +76,23 @@ describe('storageService local SQLite integration', () => {
 
   it('can perform boxes CRUD operations', async () => {
     const loc = await addLocation({ name: 'Garage' });
+
+    const categories = await getCategories();
+    expect(categories.map(category => category.name)).toEqual(['Caixa', 'Saco', 'Mala']);
     
     // Create
-    const box = await addBox({ locationId: loc.id, name: 'Summer Clothes', description: 'T-shirts and shorts' });
+    const box = await addBox({ locationId: loc.id, categoryId: categories[1].id, name: 'Summer Clothes', description: 'T-shirts and shorts' });
     expect(box.id).toBeDefined();
     expect(box.boxNumber).toBe(1);
     expect(box.locationId).toBe(loc.id);
+    expect(box.categoryId).toBe('saco');
     expect(box.name).toBe('Summer Clothes');
 
     // List
     let boxes = await getBoxes();
     expect(boxes).toHaveLength(1);
     expect(boxes[0].name).toBe('Summer Clothes');
+    expect(boxes[0].categoryId).toBe('saco');
 
     // Get by ID
     const found = await getBoxById(box.id);

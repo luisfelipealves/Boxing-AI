@@ -1,9 +1,15 @@
-import { Location, Box, Item, AppData } from "../types";
+import { Location, Category, Box, Item, AppData } from "../types";
 import initSqlJs, { Database } from 'sql.js';
 
 const DB_NAME = 'BoxTrackPersonalDB';
 const STORE_NAME = 'sqlite';
 const KEY = 'database';
+export const DEFAULT_CATEGORY_ID = 'caixa';
+const DEFAULT_CATEGORIES: Category[] = [
+  { id: 'caixa', name: 'Caixa' },
+  { id: 'saco', name: 'Saco' },
+  { id: 'mala', name: 'Mala' },
+];
 
 let wasmBinary: Uint8Array | undefined;
 
@@ -77,10 +83,17 @@ const createSchema = (db: Database) => {
       created_at INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS categories (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS boxes (
       id TEXT PRIMARY KEY,
       box_number INTEGER,
       location_id TEXT NOT NULL,
+      category_id TEXT,
       name TEXT NOT NULL,
       description TEXT,
       created_at INTEGER NOT NULL
@@ -103,6 +116,22 @@ const createSchema = (db: Database) => {
   } catch {
     // The column already exists.
   }
+
+  // Keep databases created before categories were introduced usable.
+  try {
+    db.run('ALTER TABLE boxes ADD COLUMN category_id TEXT');
+  } catch {
+    // The column already exists.
+  }
+
+  const createdAt = Date.now();
+  DEFAULT_CATEGORIES.forEach(category => {
+    db.run(
+      'INSERT OR IGNORE INTO categories (id, name, created_at) VALUES (?, ?, ?)',
+      [category.id, category.name, createdAt]
+    );
+  });
+  db.run('UPDATE boxes SET category_id = ? WHERE category_id IS NULL OR category_id = ?', [DEFAULT_CATEGORY_ID, '']);
 };
 
 export const initDatabase = async (): Promise<Database> => {
@@ -172,8 +201,14 @@ const mapBox = (row: any): Box => ({
   id: row.id,
   boxNumber: typeof row.box_number === 'number' ? row.box_number : undefined,
   locationId: row.location_id,
+  categoryId: row.category_id || DEFAULT_CATEGORY_ID,
   name: row.name,
   description: row.description || undefined,
+});
+
+const mapCategory = (row: any): Category => ({
+  id: row.id,
+  name: row.name,
 });
 
 const mapItem = (row: any): Item => ({
@@ -256,6 +291,11 @@ export const getLocationById = async (id: string): Promise<Location | undefined>
 
 // --- BOXES ---
 
+export const getCategories = async (): Promise<Category[]> => {
+  const rows = await selectAll('SELECT id, name FROM categories ORDER BY created_at ASC');
+  return rows.map(mapCategory);
+};
+
 export const getBoxes = async (): Promise<Box[]> => {
   const rows = await selectAll('SELECT * FROM boxes ORDER BY created_at ASC');
   return rows.map(mapBox);
@@ -274,13 +314,14 @@ export const addBox = async (box: Omit<Box, 'id'>): Promise<Box> => {
   );
   const boxNumber = Number(nextNumberRow?.next_box_number || 1);
   await executeRun(
-    'INSERT INTO boxes (id, box_number, location_id, name, description, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [id, boxNumber, box.locationId, box.name, box.description || null, createdAt]
+    'INSERT INTO boxes (id, box_number, location_id, category_id, name, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [id, boxNumber, box.locationId, box.categoryId || DEFAULT_CATEGORY_ID, box.name, box.description || null, createdAt]
   );
   return {
     id,
     boxNumber,
     locationId: box.locationId,
+    categoryId: box.categoryId || DEFAULT_CATEGORY_ID,
     name: box.name,
     description: box.description,
   };
@@ -288,8 +329,8 @@ export const addBox = async (box: Omit<Box, 'id'>): Promise<Box> => {
 
 export const updateBox = async (updatedBox: Box): Promise<Box> => {
   await executeRun(
-    'UPDATE boxes SET location_id = ?, name = ?, description = ? WHERE id = ?',
-    [updatedBox.locationId, updatedBox.name, updatedBox.description || null, updatedBox.id]
+    'UPDATE boxes SET location_id = ?, category_id = ?, name = ?, description = ? WHERE id = ?',
+    [updatedBox.locationId, updatedBox.categoryId || DEFAULT_CATEGORY_ID, updatedBox.name, updatedBox.description || null, updatedBox.id]
   );
   return updatedBox;
 };
@@ -367,6 +408,7 @@ export const getExportData = async (): Promise<AppData> => {
   ]);
   return {
     locations,
+    categories: await getCategories(),
     boxes,
     items,
     timestamp: Date.now(),
@@ -379,6 +421,7 @@ export const importData = async (data: AppData): Promise<{ success: boolean }> =
     db.run("BEGIN TRANSACTION");
     try {
       db.run("DELETE FROM locations");
+      db.run("DELETE FROM categories");
       db.run("DELETE FROM boxes");
       db.run("DELETE FROM items");
 
@@ -388,10 +431,16 @@ export const importData = async (data: AppData): Promise<{ success: boolean }> =
           [loc.id, loc.name, loc.description || null, Date.now()]
         );
       }
+      for (const category of data.categories || DEFAULT_CATEGORIES) {
+        db.run(
+          'INSERT INTO categories (id, name, created_at) VALUES (?, ?, ?)',
+          [category.id, category.name, Date.now()]
+        );
+      }
       for (const box of data.boxes) {
         db.run(
-          'INSERT INTO boxes (id, box_number, location_id, name, description, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          [box.id, box.boxNumber ?? data.boxes.indexOf(box) + 1, box.locationId, box.name, box.description || null, Date.now()]
+          'INSERT INTO boxes (id, box_number, location_id, category_id, name, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [box.id, box.boxNumber ?? data.boxes.indexOf(box) + 1, box.locationId, box.categoryId || DEFAULT_CATEGORY_ID, box.name, box.description || null, Date.now()]
         );
       }
       for (const item of data.items) {

@@ -43,7 +43,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Chat, GenerateContentResponse } from "@google/genai";
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
-import { Location, Box, Item } from './types';
+import { Location, Category, Box, Item } from './types';
 import * as storage from './services/storageService';
 import { analyzeItemImage, analyzeItemAudio, createInventoryChat } from './services/geminiService';
 import { getGeminiApiKey, setStoredGeminiApiKey } from './services/geminiKeyService';
@@ -724,6 +724,8 @@ export const AddBoxPage = () => {
   const [description, setDescription] = useState('');
   const [locationId, setLocationId] = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
+  const [categoryId, setCategoryId] = useState(storage.DEFAULT_CATEGORY_ID);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(Boolean(id && id !== 'new'));
 
@@ -736,16 +738,19 @@ export const AddBoxPage = () => {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [locationsData, boxData] = await Promise.all([
+        const [locationsData, categoriesData, boxData] = await Promise.all([
           storage.getLocations(),
+          storage.getCategories(),
           isEditing && id ? storage.getBoxById(id) : Promise.resolve(undefined)
         ]);
 
         setLocations(locationsData);
+        setCategories(categoriesData);
         if (isEditing && boxData) {
           setName(boxData.name);
           setDescription(boxData.description || '');
           setLocationId(boxData.locationId || '');
+          setCategoryId(boxData.categoryId || storage.DEFAULT_CATEGORY_ID);
         }
       } catch (error) {
         console.error("Failed to load box data", error);
@@ -766,6 +771,7 @@ export const AddBoxPage = () => {
         await storage.updateBox({
           id,
           locationId,
+          categoryId,
           name,
           description,
         });
@@ -773,7 +779,8 @@ export const AddBoxPage = () => {
         await storage.addBox({
           name,
           description,
-          locationId
+          locationId,
+          categoryId
         });
       }
       navigate('/');
@@ -811,6 +818,21 @@ export const AddBoxPage = () => {
       <Header title={isEditing ? 'Edit Box' : 'New Box'} backTo={isEditing ? (id ? `/box/${id}` : '/') : '/'} />
 
       <div className="p-4 space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category <span className="text-red-500">*</span></label>
+          <select
+            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+            value={categoryId}
+            onChange={e => setCategoryId(e.target.value)}
+            required
+          >
+            <option value="">Select a category</option>
+            {categories.map(category => (
+              <option key={category.id} value={category.id}>{category.name}</option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
           <input
@@ -864,7 +886,7 @@ export const AddBoxPage = () => {
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!name.trim() || !locationId || isSubmitting}
+              disabled={!name.trim() || !locationId || !categoryId || isSubmitting}
               className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none"
             >
               {isSubmitting ? (isEditing ? 'Saving...' : 'Creating...') : (isEditing ? 'Save Changes' : 'Create Box')}
