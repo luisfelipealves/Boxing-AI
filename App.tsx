@@ -82,6 +82,21 @@ const printLabel = async () => {
     alert('Unable to start printing. Check the Android print service and try again.');
   }
 };
+const getBlockedDeleteMessage = (error: unknown): string | undefined => {
+  if (!storage.isDeleteBlockedByDependenciesError(error)) return undefined;
+
+  if (error.entity === 'location' && error.dependency === 'boxes') {
+    const noun = error.count === 1 ? 'Box' : 'Boxes';
+    return `Não é possível excluir esta Location porque ela contém ${error.count} ${noun}. Mova ou exclua ${error.count === 1 ? 'essa Box' : 'essas Boxes'} primeiro.`;
+  }
+
+  if (error.entity === 'box' && error.dependency === 'items') {
+    const noun = error.count === 1 ? 'Item' : 'Items';
+    return `Não é possível excluir esta Box porque ela contém ${error.count} ${noun}. Mova ou exclua ${error.count === 1 ? 'esse Item' : 'esses Items'} primeiro.`;
+  }
+
+  return undefined;
+};
 
 
 // --- UI COMPONENTS ---
@@ -708,6 +723,12 @@ const ManageLocationPage = () => {
       await storage.deleteLocation(id);
       navigate('/locations');
     } catch (error) {
+      const blockedDeleteMessage = getBlockedDeleteMessage(error);
+      if (blockedDeleteMessage) {
+        alert(blockedDeleteMessage);
+        return;
+      }
+
       console.error('Failed to delete location', error);
       alert('Failed to delete location');
     } finally {
@@ -1002,6 +1023,7 @@ const BoxDetailsPage = () => {
   const [categoryName, setCategoryName] = useState<string>('');
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -1039,6 +1061,26 @@ const BoxDetailsPage = () => {
     }
   };
 
+  const handleDeleteBox = async () => {
+    if (!id || !confirm('Delete this box?')) return;
+    setIsDeleting(true);
+    try {
+      await storage.deleteBox(id);
+      navigate('/');
+    } catch (error) {
+      const blockedDeleteMessage = getBlockedDeleteMessage(error);
+      if (blockedDeleteMessage) {
+        alert(blockedDeleteMessage);
+        return;
+      }
+
+      console.error('Failed to delete box', error);
+      alert('Failed to delete box');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   if (loading) return <PageLoader />;
   if (!box) return <ErrorDisplay message="Box not found" />;
 
@@ -1054,6 +1096,13 @@ const BoxDetailsPage = () => {
             </button>
             <button onClick={() => navigate(`/box/${id}/edit`)} className="text-gray-600 dark:text-gray-300">
               <FilePenLine size={24} />
+            </button>
+            <button
+              onClick={handleDeleteBox}
+              disabled={isDeleting}
+              className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-1 rounded-full transition-colors disabled:opacity-50"
+            >
+              <Trash2 size={24} />
             </button>
           </div>
         }

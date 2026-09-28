@@ -109,6 +109,74 @@ describe('storageService local SQLite integration', () => {
     expect(boxes).toHaveLength(0);
   });
 
+  it('blocks deleting a location that still has boxes and preserves dependents', async () => {
+    const loc = await addLocation({ name: 'Garage' });
+    const otherLoc = await addLocation({ name: 'Closet' });
+    const blockedBox = await addBox({ locationId: loc.id, name: 'Tools' });
+    const secondBlockedBox = await addBox({ locationId: loc.id, name: 'Paint' });
+    const otherBox = await addBox({ locationId: otherLoc.id, name: 'Shoes' });
+    const item = await addItem({ boxId: blockedBox.id, name: 'Hammer' });
+
+    await expect(deleteLocation(loc.id)).rejects.toMatchObject({
+      code: 'DELETE_BLOCKED_BY_DEPENDENCIES',
+      entity: 'location',
+      dependency: 'boxes',
+      count: 2,
+    });
+
+    expect(await getLocationById(loc.id)).toEqual(loc);
+    expect(await getBoxById(blockedBox.id)).toEqual(blockedBox);
+    expect(await getBoxById(secondBlockedBox.id)).toEqual(secondBlockedBox);
+    expect(await getBoxById(otherBox.id)).toEqual(otherBox);
+    expect(await getItemsByBox(blockedBox.id)).toEqual([item]);
+  });
+
+  it('deletes an empty location without orphaning boxes', async () => {
+    const emptyLoc = await addLocation({ name: 'Empty Garage' });
+    const occupiedLoc = await addLocation({ name: 'Closet' });
+    const remainingBox = await addBox({ locationId: occupiedLoc.id, name: 'Shoes' });
+
+    await deleteLocation(emptyLoc.id);
+
+    expect(await getLocationById(emptyLoc.id)).toBeUndefined();
+    expect(await getLocations()).toEqual([occupiedLoc]);
+    expect(await getBoxes()).toEqual([remainingBox]);
+  });
+
+  it('blocks deleting a box that still has items and preserves dependents', async () => {
+    const loc = await addLocation({ name: 'Garage' });
+    const blockedBox = await addBox({ locationId: loc.id, name: 'Tools' });
+    const otherBox = await addBox({ locationId: loc.id, name: 'Empty' });
+    await addItem({ boxId: blockedBox.id, name: 'Hammer' });
+    await addItem({ boxId: blockedBox.id, name: 'Nails' });
+
+    await expect(deleteBox(blockedBox.id)).rejects.toMatchObject({
+      code: 'DELETE_BLOCKED_BY_DEPENDENCIES',
+      entity: 'box',
+      dependency: 'items',
+      count: 2,
+    });
+
+    expect(await getBoxById(blockedBox.id)).toEqual(blockedBox);
+    expect(await getBoxById(otherBox.id)).toEqual(otherBox);
+    const preservedItems = await getItemsByBox(blockedBox.id);
+    expect(preservedItems).toHaveLength(2);
+    expect(preservedItems.map(item => item.name).sort()).toEqual(['Hammer', 'Nails']);
+  });
+
+  it('deletes an empty box without orphaning items', async () => {
+    const loc = await addLocation({ name: 'Garage' });
+    const emptyBox = await addBox({ locationId: loc.id, name: 'Empty' });
+    const occupiedBox = await addBox({ locationId: loc.id, name: 'Tools' });
+    const item = await addItem({ boxId: occupiedBox.id, name: 'Hammer' });
+
+    await deleteBox(emptyBox.id);
+
+    expect(await getBoxById(emptyBox.id)).toBeUndefined();
+    expect(await getBoxes()).toEqual([occupiedBox]);
+    expect(await getItems()).toEqual([item]);
+  });
+
   it('can perform items CRUD operations', async () => {
     const loc = await addLocation({ name: 'Garage' });
     const box = await addBox({ locationId: loc.id, name: 'Box 1' });

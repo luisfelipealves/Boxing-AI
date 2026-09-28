@@ -11,6 +11,29 @@ export const DEFAULT_CATEGORIES: Category[] = [
   { id: 'mala', name: 'Mala' },
 ];
 
+export type DeleteBlockedEntity = 'location' | 'box';
+export type DeleteBlockedDependency = 'boxes' | 'items';
+
+export class DeleteBlockedByDependenciesError extends Error {
+  readonly code = 'DELETE_BLOCKED_BY_DEPENDENCIES';
+
+  constructor(
+    readonly entity: DeleteBlockedEntity,
+    readonly dependency: DeleteBlockedDependency,
+    readonly count: number
+  ) {
+    super(`Cannot delete ${entity} because it has ${count} ${dependency}.`);
+    this.name = 'DeleteBlockedByDependenciesError';
+  }
+}
+
+export const isDeleteBlockedByDependenciesError = (error: unknown): error is DeleteBlockedByDependenciesError => {
+  return error instanceof DeleteBlockedByDependenciesError
+    || (typeof error === 'object'
+      && error !== null
+      && (error as { code?: unknown }).code === 'DELETE_BLOCKED_BY_DEPENDENCIES');
+};
+
 let wasmBinary: Uint8Array | undefined;
 
 export const setWasmBinary = (binary: Uint8Array) => {
@@ -245,6 +268,11 @@ const selectOne = async (sql: string, params: any[] = []): Promise<any | undefin
   return row;
 };
 
+const countRows = async (sql: string, params: any[] = []): Promise<number> => {
+  const row = await selectOne(sql, params);
+  return Number(row?.count || 0);
+};
+
 const executeRun = async (sql: string, params: any[] = []) => {
   const db = await getDb();
   db.run(sql, params);
@@ -281,6 +309,11 @@ export const updateLocation = async (location: Location): Promise<Location> => {
 };
 
 export const deleteLocation = async (locationId: string): Promise<void> => {
+  const dependentBoxes = await countRows('SELECT COUNT(*) AS count FROM boxes WHERE location_id = ?', [locationId]);
+  if (dependentBoxes > 0) {
+    throw new DeleteBlockedByDependenciesError('location', 'boxes', dependentBoxes);
+  }
+
   await executeRun('DELETE FROM locations WHERE id = ?', [locationId]);
 };
 
@@ -336,6 +369,11 @@ export const updateBox = async (updatedBox: Box): Promise<Box> => {
 };
 
 export const deleteBox = async (boxId: string): Promise<void> => {
+  const dependentItems = await countRows('SELECT COUNT(*) AS count FROM items WHERE box_id = ?', [boxId]);
+  if (dependentItems > 0) {
+    throw new DeleteBlockedByDependenciesError('box', 'items', dependentItems);
+  }
+
   await executeRun('DELETE FROM boxes WHERE id = ?', [boxId]);
 };
 
