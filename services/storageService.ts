@@ -13,6 +13,8 @@ export const DEFAULT_CATEGORIES: Category[] = [
 
 export type DeleteBlockedEntity = 'location' | 'box';
 export type DeleteBlockedDependency = 'boxes' | 'items';
+export type IntegrityEntity = 'box' | 'item';
+export type ReferenceEntity = 'location' | 'category' | 'box';
 
 export class DeleteBlockedByDependenciesError extends Error {
   readonly code = 'DELETE_BLOCKED_BY_DEPENDENCIES';
@@ -24,6 +26,32 @@ export class DeleteBlockedByDependenciesError extends Error {
   ) {
     super(`Cannot delete ${entity} because it has ${count} ${dependency}.`);
     this.name = 'DeleteBlockedByDependenciesError';
+  }
+}
+
+export class InvalidReferenceError extends Error {
+  readonly code = 'INVALID_REFERENCE';
+
+  constructor(
+    readonly entity: IntegrityEntity,
+    readonly field: string,
+    readonly referenceEntity: ReferenceEntity,
+    readonly referenceId: string
+  ) {
+    super(`Cannot save ${entity} because ${field} references missing ${referenceEntity} ${referenceId}.`);
+    this.name = 'InvalidReferenceError';
+  }
+}
+
+export class EntityNotFoundError extends Error {
+  readonly code = 'ENTITY_NOT_FOUND';
+
+  constructor(
+    readonly entity: IntegrityEntity,
+    readonly entityId: string
+  ) {
+    super(`Cannot update ${entity} because ${entityId} was not found.`);
+    this.name = 'EntityNotFoundError';
   }
 }
 
@@ -273,6 +301,29 @@ const countRows = async (sql: string, params: any[] = []): Promise<number> => {
   return Number(row?.count || 0);
 };
 
+const rowExists = async (table: 'locations' | 'categories' | 'boxes' | 'items', id: string): Promise<boolean> => {
+  const row = await selectOne(`SELECT 1 AS exists_flag FROM ${table} WHERE id = ?`, [id]);
+  return Boolean(row);
+};
+
+const requireEntityExists = async (table: 'boxes' | 'items', entity: IntegrityEntity, entityId: string): Promise<void> => {
+  if (!(await rowExists(table, entityId))) {
+    throw new EntityNotFoundError(entity, entityId);
+  }
+};
+
+const requireReferenceExists = async (
+  table: 'locations' | 'categories' | 'boxes',
+  entity: IntegrityEntity,
+  field: string,
+  referenceEntity: ReferenceEntity,
+  referenceId: string
+): Promise<void> => {
+  if (!(await rowExists(table, referenceId))) {
+    throw new InvalidReferenceError(entity, field, referenceEntity, referenceId);
+  }
+};
+
 const executeRun = async (sql: string, params: any[] = []) => {
   const db = await getDb();
   db.run(sql, params);
@@ -340,6 +391,10 @@ export const getBoxById = async (id: string): Promise<Box | undefined> => {
 };
 
 export const addBox = async (box: Omit<Box, 'id'>): Promise<Box> => {
+  const categoryId = box.categoryId || DEFAULT_CATEGORY_ID;
+  await requireReferenceExists('locations', 'box', 'locationId', 'location', box.locationId);
+  await requireReferenceExists('categories', 'box', 'categoryId', 'category', categoryId);
+
   const id = crypto.randomUUID();
   const createdAt = Date.now();
   const nextNumberRow = await selectOne(
@@ -348,24 +403,29 @@ export const addBox = async (box: Omit<Box, 'id'>): Promise<Box> => {
   const boxNumber = Number(nextNumberRow?.next_box_number || 1);
   await executeRun(
     'INSERT INTO boxes (id, box_number, location_id, category_id, name, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [id, boxNumber, box.locationId, box.categoryId || DEFAULT_CATEGORY_ID, box.name, box.description || null, createdAt]
+    [id, boxNumber, box.locationId, categoryId, box.name, box.description || null, createdAt]
   );
   return {
     id,
     boxNumber,
     locationId: box.locationId,
-    categoryId: box.categoryId || DEFAULT_CATEGORY_ID,
+    categoryId,
     name: box.name,
     description: box.description,
   };
 };
 
 export const updateBox = async (updatedBox: Box): Promise<Box> => {
+  const categoryId = updatedBox.categoryId || DEFAULT_CATEGORY_ID;
+  await requireEntityExists('boxes', 'box', updatedBox.id);
+  await requireReferenceExists('locations', 'box', 'locationId', 'location', updatedBox.locationId);
+  await requireReferenceExists('categories', 'box', 'categoryId', 'category', categoryId);
+
   await executeRun(
     'UPDATE boxes SET location_id = ?, category_id = ?, name = ?, description = ? WHERE id = ?',
-    [updatedBox.locationId, updatedBox.categoryId || DEFAULT_CATEGORY_ID, updatedBox.name, updatedBox.description || null, updatedBox.id]
+    [updatedBox.locationId, categoryId, updatedBox.name, updatedBox.description || null, updatedBox.id]
   );
-  return updatedBox;
+  return { ...updatedBox, categoryId };
 };
 
 export const deleteBox = async (boxId: string): Promise<void> => {
@@ -395,6 +455,8 @@ export const getItemById = async (itemId: string): Promise<Item | undefined> => 
 };
 
 export const addItem = async (item: Omit<Item, 'id' | 'createdAt'>): Promise<Item> => {
+  await requireReferenceExists('boxes', 'item', 'boxId', 'box', item.boxId);
+
   const id = crypto.randomUUID();
   const createdAt = Date.now();
   await executeRun(
@@ -413,6 +475,8 @@ export const addItem = async (item: Omit<Item, 'id' | 'createdAt'>): Promise<Ite
 };
 
 export const updateItem = async (updatedItem: Item): Promise<Item> => {
+  await requireEntityExists('items', 'item', updatedItem.id);
+
   await executeRun(
     'UPDATE items SET name = ?, description = ?, material = ?, color = ? WHERE id = ?',
     [updatedItem.name, updatedItem.description || null, updatedItem.material || null, updatedItem.color || null, updatedItem.id]
@@ -421,6 +485,9 @@ export const updateItem = async (updatedItem: Item): Promise<Item> => {
 };
 
 export const moveItem = async (itemId: string, newBoxId: string): Promise<Item> => {
+  await requireEntityExists('items', 'item', itemId);
+  await requireReferenceExists('boxes', 'item', 'boxId', 'box', newBoxId);
+
   await executeRun(
     'UPDATE items SET box_id = ? WHERE id = ?',
     [newBoxId, itemId]

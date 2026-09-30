@@ -177,6 +177,99 @@ describe('storageService local SQLite integration', () => {
     expect(await getItems()).toEqual([item]);
   });
 
+  it('rejects creating a box with an unknown location or category without persisting it', async () => {
+    const loc = await addLocation({ name: 'Garage' });
+
+    await expect(addBox({ locationId: 'missing-location', name: 'Orphan box' })).rejects.toMatchObject({
+      code: 'INVALID_REFERENCE',
+      entity: 'box',
+      field: 'locationId',
+      referenceEntity: 'location',
+      referenceId: 'missing-location',
+    });
+
+    await expect(addBox({ locationId: loc.id, categoryId: 'missing-category', name: 'Invalid category box' })).rejects.toMatchObject({
+      code: 'INVALID_REFERENCE',
+      entity: 'box',
+      field: 'categoryId',
+      referenceEntity: 'category',
+      referenceId: 'missing-category',
+    });
+
+    expect(await getBoxes()).toEqual([]);
+  });
+
+  it('rejects updating a missing box or changing a box to unknown references without mutating it', async () => {
+    const loc = await addLocation({ name: 'Garage' });
+    const categories = await getCategories();
+    const box = await addBox({ locationId: loc.id, categoryId: categories[0].id, name: 'Tools' });
+
+    await expect(updateBox({ ...box, id: 'missing-box', name: 'Ghost' })).rejects.toMatchObject({
+      code: 'ENTITY_NOT_FOUND',
+      entity: 'box',
+      entityId: 'missing-box',
+    });
+
+    await expect(updateBox({ ...box, locationId: 'missing-location' })).rejects.toMatchObject({
+      code: 'INVALID_REFERENCE',
+      entity: 'box',
+      field: 'locationId',
+      referenceEntity: 'location',
+      referenceId: 'missing-location',
+    });
+
+    await expect(updateBox({ ...box, categoryId: 'missing-category' })).rejects.toMatchObject({
+      code: 'INVALID_REFERENCE',
+      entity: 'box',
+      field: 'categoryId',
+      referenceEntity: 'category',
+      referenceId: 'missing-category',
+    });
+
+    expect(await getBoxById(box.id)).toEqual(box);
+  });
+
+  it('rejects creating an item for an unknown box without persisting it', async () => {
+    await expect(addItem({ boxId: 'missing-box', name: 'Orphan item' })).rejects.toMatchObject({
+      code: 'INVALID_REFERENCE',
+      entity: 'item',
+      field: 'boxId',
+      referenceEntity: 'box',
+      referenceId: 'missing-box',
+    });
+
+    expect(await getItems()).toEqual([]);
+  });
+
+  it('rejects updating or moving missing items and rejects moving to an unknown box without mutating it', async () => {
+    const loc = await addLocation({ name: 'Garage' });
+    const box = await addBox({ locationId: loc.id, name: 'Tools' });
+    const item = await addItem({ boxId: box.id, name: 'Hammer' });
+
+    await expect(updateItem({ ...item, id: 'missing-item', name: 'Ghost hammer' })).rejects.toMatchObject({
+      code: 'ENTITY_NOT_FOUND',
+      entity: 'item',
+      entityId: 'missing-item',
+    });
+
+    await expect(moveItem('missing-item', box.id)).rejects.toMatchObject({
+      code: 'ENTITY_NOT_FOUND',
+      entity: 'item',
+      entityId: 'missing-item',
+    });
+
+    await expect(moveItem(item.id, 'missing-box')).rejects.toMatchObject({
+      code: 'INVALID_REFERENCE',
+      entity: 'item',
+      field: 'boxId',
+      referenceEntity: 'box',
+      referenceId: 'missing-box',
+    });
+
+    expect(await getItemById(item.id)).toEqual(item);
+    expect(await getItemsByBox(box.id)).toEqual([item]);
+  });
+
   it('can perform items CRUD operations', async () => {
     const loc = await addLocation({ name: 'Garage' });
     const box = await addBox({ locationId: loc.id, name: 'Box 1' });
