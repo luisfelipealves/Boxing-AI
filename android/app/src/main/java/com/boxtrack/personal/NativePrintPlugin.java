@@ -422,16 +422,16 @@ public class NativePrintPlugin extends Plugin {
 
     private boolean hasScanPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            return hasPermission(Manifest.permission.BLUETOOTH_SCAN);
+            return hasRuntimePermission(Manifest.permission.BLUETOOTH_SCAN);
         }
-        return hasPermission(Manifest.permission.ACCESS_FINE_LOCATION);
+        return hasRuntimePermission(Manifest.permission.ACCESS_FINE_LOCATION);
     }
 
     private boolean hasConnectPermission() {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S || hasPermission(Manifest.permission.BLUETOOTH_CONNECT);
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S || hasRuntimePermission(Manifest.permission.BLUETOOTH_CONNECT);
     }
 
-    private boolean hasPermission(String permission) {
+    private boolean hasRuntimePermission(String permission) {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M
                 || ContextCompat.checkSelfPermission(getContext(), permission) == PackageManager.PERMISSION_GRANTED;
     }
