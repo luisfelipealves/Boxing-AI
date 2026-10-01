@@ -68,7 +68,7 @@ const ERROR_PRESENTATIONS: Record<NiimbotBridgeErrorCode, Omit<NiimbotErrorPrese
   },
   'identification-failed': {
     title: 'Could not prepare the B1 Pro',
-    action: 'Reconnect after confirming the NIIMBOT B1 Pro is powered on, awake, and exposing its BLE print channel.',
+    action: 'Reconnect after confirming the NIIMBOT B1 Pro is powered on, awake, and exposing its BLE print service.',
   },
   'unsupported-model': {
     title: 'This printer is not supported',
@@ -79,7 +79,7 @@ const ERROR_PRESENTATIONS: Record<NiimbotBridgeErrorCode, Omit<NiimbotErrorPrese
     action: 'Restart the printer, reconnect, and verify this is a NIIMBOT B1 Pro.',
   },
   'missing-gatt-characteristic': {
-    title: 'B1 Pro BLE print channel was not found',
+    title: 'B1 Pro BLE print characteristic was not found',
     action: 'Restart the printer, reconnect, and try again with the NIIMBOT B1 Pro selected.',
   },
   'invalid-raster': {
