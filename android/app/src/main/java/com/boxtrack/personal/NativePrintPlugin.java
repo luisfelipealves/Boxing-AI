@@ -62,14 +62,12 @@ public class NativePrintPlugin extends Plugin {
     private static final UUID NIIMBOT_CHARACTERISTIC_UUID = UUID.fromString("bef8d6c9-9c21-4c9e-b632-bd58c1009f9f");
     private static final UUID CLIENT_CHARACTERISTIC_CONFIG_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 
-    private static final int NIIMBOT_B1_MODEL_ID = 4096;
     private static final int NIIMBOT_B1_PRO_MODEL_ID = 4097;
     private static final String PROFILE_ID = "niimbot-b1-pro-50x30";
     private static final String PREFS = "niimbot_ble_printer";
     private static final String PREF_SELECTED = "selected_printer";
     private static final long DEFAULT_SCAN_TIMEOUT_MS = 8_000L;
     private static final long DEFAULT_CONNECT_TIMEOUT_MS = 10_000L;
-    private static final long IDENTIFY_TIMEOUT_MS = 1_000L;
     private static final long COMMAND_TIMEOUT_MS = 2_000L;
     private static final long PAGE_END_TIMEOUT_MS = 12_000L;
     private static final long PRINT_CONFIRM_TIMEOUT_MS = 25_000L;
@@ -557,7 +555,7 @@ public class NativePrintPlugin extends Plugin {
                         return;
                     }
 
-                    identifyConnectedPrinter(call, device, persistOnIdentify, success);
+                    useFixedB1ProPrinter(call, device, persistOnIdentify, success);
                 };
 
                 if (!enableNotifications(gatt, characteristic, afterNotificationsEnabled)) {
@@ -615,36 +613,15 @@ public class NativePrintPlugin extends Plugin {
         return false;
     }
 
-    private void identifyConnectedPrinter(PluginCall call, BluetoothDevice device, boolean persist, IdentifySuccess success) {
-        try {
-            writeRaw(NiimbotV4Protocol.INITIAL_CONNECTION_PACKET);
-            mainHandler.postDelayed(() -> sendWait(0x40, new byte[] { 0x08 }, 0x48, IDENTIFY_TIMEOUT_MS, response -> {
-                int modelId = NiimbotV4Protocol.parseModelId(toProtocolResponse(response));
-                if (modelId < 0) {
-                    resolveError(call, "identification-failed", "The selected printer did not report a model id.", null, device.getAddress(), true);
-                    return;
-                }
-
-                if (modelId != NIIMBOT_B1_PRO_MODEL_ID) {
-                    String message = modelId == NIIMBOT_B1_MODEL_ID
-                            ? "NIIMBOT B1 (model id 4096) is not supported. Use NIIMBOT B1 Pro (model id 4097)."
-                            : "NIIMBOT model id " + modelId + " is not supported. Use NIIMBOT B1 Pro (model id 4097).";
-                    resolveError(call, "unsupported-model", message, modelId, device.getAddress(), false);
-                    return;
-                }
-
-                JSObject identified = selectedPrinterObject(device, modelId);
-                if (persist) {
-                    getPrefs().edit().putString(PREF_SELECTED, identified.toString()).apply();
-                }
-                if (success != null) {
-                    success.onIdentified(identified);
-                } else {
-                    call.resolve(ok(identified));
-                }
-            }), 200L);
-        } catch (Exception exception) {
-            resolveError(call, "identification-failed", messageOrDefault(exception, "Unable to identify the selected printer."), null, device.getAddress(), true);
+    private void useFixedB1ProPrinter(PluginCall call, BluetoothDevice device, boolean persist, IdentifySuccess success) {
+        JSObject identified = selectedPrinterObject(device);
+        if (persist) {
+            getPrefs().edit().putString(PREF_SELECTED, identified.toString()).apply();
+        }
+        if (success != null) {
+            success.onIdentified(identified);
+        } else {
+            call.resolve(ok(identified));
         }
     }
 
@@ -700,23 +677,33 @@ public class NativePrintPlugin extends Plugin {
     }
 
     @SuppressLint("MissingPermission")
-    private JSObject selectedPrinterObject(BluetoothDevice device, int modelId) {
-        JSObject object = deviceObject(device, null, null);
-        String displayName = device.getName() == null || device.getName().trim().isEmpty()
+    private JSObject selectedPrinterObject(BluetoothDevice device) {
+        String name = device.getName();
+        return fixedB1ProSelectedPrinterObject(device.getAddress(), name, isoNow());
+    }
+
+    static JSObject fixedB1ProSelectedPrinterObject(String address, String name, String identifiedAt) {
+        JSObject object = new JSObject();
+        object.put("deviceId", address);
+        object.put("address", address);
+        if (name != null && !name.trim().isEmpty()) {
+            object.put("name", name);
+        }
+        String displayName = name == null || name.trim().isEmpty()
                 ? "NIIMBOT B1 Pro"
-                : device.getName();
+                : name;
         object.put("displayName", displayName);
-        object.put("reconnectId", device.getAddress());
-        object.put("modelId", modelId);
+        object.put("reconnectId", address);
+        object.put("modelId", NIIMBOT_B1_PRO_MODEL_ID);
         object.put("profileId", PROFILE_ID);
         object.put("profile", profileObject());
         object.put("serviceUuid", NIIMBOT_SERVICE_UUID.toString());
         object.put("characteristicUuid", NIIMBOT_CHARACTERISTIC_UUID.toString());
-        object.put("identifiedAt", isoNow());
+        object.put("identifiedAt", identifiedAt);
         return object;
     }
 
-    private JSObject profileObject() {
+    private static JSObject profileObject() {
         JSObject profile = new JSObject();
         profile.put("id", PROFILE_ID);
         profile.put("printerName", "Niimbot B1 Pro");
