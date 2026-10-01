@@ -1,37 +1,44 @@
-# DEV-010 Handoff: B1 Pro print UI
+---
+task: DEV-010
+status: IMPLEMENTED
+branch: agent/dev-010-b1-pro-print-ui
+worktree: /home/felipe/projetos/Boxing-AI/worktrees/dev-010
+commit: 69af7b54987cdcfe36e0e29ad806c7647f44b37b
+created_at: 2026-10-01
+---
 
-Task: DEV-010
+# Developer Handoff
+
+Task: DEV-010 Direct B1 Pro setup/print UI and progress/error states
 Status: IMPLEMENTED
 Branch: agent/dev-010-b1-pro-print-ui
 Worktree: /home/felipe/projetos/Boxing-AI/worktrees/dev-010
-Commit: branch HEAD commit for this handoff
+Commit: 69af7b54987cdcfe36e0e29ad806c7647f44b37b
 
-## Changed files
+# Files Changed
 
+- .ai/development/handoffs/DEV-010-b1-pro-print-ui.md
 - App.tsx
 - services/niimbotUi.ts
 - services/niimbotUi.test.ts
 
-## Implementation summary
+# Implementation Summary
 
-- Replaced the label page action with an Android direct BLE NIIMBOT B1 Pro setup and print flow using the DEV-007 `NiimbotBlePrinter` plugin contract.
-- Added first-run Bluetooth permission guidance, scan, connect, identify, selected-printer display, reconnect/change/rescan/forget actions, and disabled print guidance until setup is complete.
-- Added progress UI for permission/setup, scanning, connecting, identifying, rendering, sending, printing/confirming, success, and failure.
-- Added visible actionable messages for every `NiimbotBridgeErrorCode`, including unconfirmed print guidance to inspect the physical label before retrying.
-- Preserved non-Android browser preview as a fallback only, while making Android copy reference direct B1 Pro BLE connection.
-- Added stable print request helper so retrying after recoverable failure reuses the same label snapshot without mutating QR payload, box number, box data, or selected label content.
+- Added Android direct NIIMBOT B1 Pro setup/print UI using the DEV-007 `NiimbotBlePrinter` methods.
+- Added permission guidance, scan/select/connect/identify/persist display, selected printer/profile details, reconnect/rescan/change/forget actions, progress states, and actionable error states.
+- Added unconfirmed-print guidance and retry helper behavior that preserves the same label snapshot.
+- Verified Android label UI copy does not reference Android print services, system printer selection, or PrintManager.
 
-## Validation
+# Validation
 
-- PASS: `npm run test` (26 tests passed; expected geminiService stderr from existing error-handling test)
-- PASS: `npm run build` (build passed; existing chunk-size and browserslist warnings)
+- `npm run test` — passed: 5 files, 26 tests.
+- `npm run build` — passed with existing Vite chunk-size and Browserslist warnings.
 
-## Known issues
+# Known Issues / Out of Scope
 
-- `printLabel` still sends an empty raster placeholder until DEV-009 renderer and DEV-008 transfer implementation provide the real bitmap/transfer path.
-- Real NIIMBOT B1 Pro hardware validation remains required after native print transfer integration.
+- Actual raster rendering and full BLE transfer were placeholders in this branch pending DEV-009 renderer and DEV-008 transfer implementation.
+- Real NIIMBOT B1 Pro hardware validation is still required after native transfer integration.
 
-## Integration notes
+# Integration Notes
 
-- UI calls only DEV-007 plugin methods: `checkPermissions`, `requestPermissions`, `scan`, `connect`, `identify`, `getSelectedPrinter`, `forgetSelectedPrinter`, and `printLabel`.
-- `services/niimbotUi.ts` centralizes UI progress labels, permission gating, bridge error copy, and the stable print request boundary for later renderer integration.
+Integration must combine this UI with DEV-009 raster rendering and DEV-008 full transfer. The UI is expected to use `NiimbotBlePrinter` methods and stable helper functions from `services/niimbotUi.ts`.
