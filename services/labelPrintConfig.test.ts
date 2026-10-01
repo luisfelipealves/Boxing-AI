@@ -8,6 +8,7 @@ import {
   NIIMBOT_B1_PRO_SERVICE_UUID,
   type NiimbotBridgeErrorCode,
   type NiimbotBridgePrintOptions,
+  type NiimbotBridgePrintResult,
   type NiimbotBridgeSelectedPrinter,
   assertSupportedNiimbotModel,
   getNiimbotModelSupport,
@@ -126,6 +127,17 @@ describe('Niimbot B1 Pro label print config', () => {
       rasterWidthPx: 576,
       rasterHeightPx: 354,
     });
+    const printResult = {
+      jobId: 'niimbot-b1-pro-123',
+      deviceId: 'android-device-id',
+      modelId: NIIMBOT_B1_PRO_MODEL_ID,
+      profileId: B1_PRO_50X30_PROFILE.id,
+      status: 'success',
+      confirmed: true,
+      copies: 1,
+    } satisfies NiimbotBridgePrintResult;
+
+    expect(printResult).toMatchObject({ status: 'success', confirmed: true, copies: 1 });
     expect(supportedErrorCodes).toContain('unsupported-model');
     expect(supportedErrorCodes).toContain('unconfirmed-print');
   });

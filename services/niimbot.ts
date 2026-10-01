@@ -191,7 +191,9 @@ export interface NiimbotBridgePrintResult {
   readonly deviceId: string;
   readonly modelId: typeof NIIMBOT_B1_PRO_MODEL_ID;
   readonly profileId: typeof B1_PRO_50X30_PROFILE.id;
+  readonly status: 'success';
   readonly confirmed: boolean;
+  readonly copies?: number;
 }
 
 export interface NiimbotNativeBlePrinterPlugin {
