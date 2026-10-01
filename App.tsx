@@ -49,10 +49,11 @@ import { analyzeItemImage, analyzeItemAudio, createInventoryChat } from './servi
 import { getGeminiApiKey, setStoredGeminiApiKey } from './services/geminiKeyService';
 import { LABEL_PRINT_CONFIG, buildBoxQrValue } from './services/labelPrintConfig';
 import { B1_PRO_50X30_PROFILE, type NiimbotNativeBlePrinterPlugin } from './services/niimbot';
+import { renderBoxLabelRaster } from './services/labelRasterRenderer';
 
 const NiimbotBlePrinter = registerPlugin<NiimbotNativeBlePrinterPlugin>('NiimbotBlePrinter');
 
-const printLabel = async () => {
+const printLabel = async (box: Box) => {
   const platform = Capacitor.getPlatform();
   console.info('[PRINT] button clicked');
   console.info(`[PRINT] platform = ${platform}`);
@@ -78,10 +79,17 @@ const printLabel = async () => {
       return;
     }
 
+    const labelRaster = renderBoxLabelRaster({
+      box,
+      origin: window.location.origin,
+      pathname: window.location.pathname,
+      profile: B1_PRO_50X30_PROFILE,
+    });
+
     const result = await NiimbotBlePrinter.printLabel({
       deviceId: selected.value.reconnectId,
       profileId: B1_PRO_50X30_PROFILE.id,
-      rasterBase64: '',
+      rasterBase64: labelRaster.rasterBase64,
       rasterWidthPx: B1_PRO_50X30_PROFILE.rasterWidthPx,
       rasterHeightPx: B1_PRO_50X30_PROFILE.rasterHeightPx,
       copies: 1,
@@ -1491,7 +1499,7 @@ const BoxLabelPage = () => {
           ℹ️ Connect your Niimbot B1 Pro and print on a fixed 50 × 30 mm label.
         </div>
         <button
-          onClick={printLabel}
+          onClick={() => printLabel(box)}
           className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
         >
           <Printer size={20} /> Print 50 × 30 mm Niimbot Label
