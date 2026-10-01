@@ -1718,7 +1718,7 @@ const BoxLabelPage = () => {
                   ['permission/setup', 'Grant Bluetooth access'],
                   ['scanning', 'Scan for NIIMBOT B1 Pro'],
                   ['connecting', 'Connect to selected printer'],
-                  ['identifying', 'Confirm B1 Pro BLE channel'],
+                  ['identifying', 'Find B1 Pro print service'],
                   ['rendering', 'Render 50 × 30 mm label'],
                   ['sending', 'Send over BLE'],
                   ['printing/confirming', 'Confirm print result'],
