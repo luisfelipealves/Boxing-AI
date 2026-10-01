@@ -22,6 +22,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelUuid;
+import android.util.Base64;
 import android.util.Log;
 
 import androidx.core.content.ContextCompat;
@@ -39,9 +40,9 @@ import com.getcapacitor.annotation.PermissionCallback;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -69,6 +70,12 @@ public class NativePrintPlugin extends Plugin {
     private static final long DEFAULT_SCAN_TIMEOUT_MS = 8_000L;
     private static final long DEFAULT_CONNECT_TIMEOUT_MS = 10_000L;
     private static final long IDENTIFY_TIMEOUT_MS = 1_000L;
+    private static final long COMMAND_TIMEOUT_MS = 2_000L;
+    private static final long PAGE_END_TIMEOUT_MS = 12_000L;
+    private static final long PRINT_CONFIRM_TIMEOUT_MS = 25_000L;
+    private static final long PRINT_STATUS_POLL_MS = 750L;
+    private static final int B1_PRO_RASTER_WIDTH_PX = 576;
+    private static final int B1_PRO_RASTER_HEIGHT_PX = 354;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Map<String, JSObject> discoveredDevices = new LinkedHashMap<>();
@@ -77,6 +84,7 @@ public class NativePrintPlugin extends Plugin {
     private BluetoothGatt currentGatt;
     private BluetoothGattCharacteristic currentCharacteristic;
     private String currentDeviceId;
+    private PrintSession activePrintSession;
 
     @PluginMethod
     public void checkPermissions(PluginCall call) {
@@ -228,14 +236,149 @@ public class NativePrintPlugin extends Plugin {
             return;
         }
 
-        connectInternal(call, deviceId, true, false, identifiedPrinter -> resolveError(
-                call,
-                "transmission-failed",
-                "NIIMBOT B1 Pro print transfer is pending DEV-008. The printer was re-identified before this print request.",
-                NIIMBOT_B1_PRO_MODEL_ID,
-                deviceId,
-                true
-        ));
+        int rasterWidth = call.getInt("rasterWidthPx", 0);
+        int rasterHeight = call.getInt("rasterHeightPx", 0);
+        if (rasterWidth != B1_PRO_RASTER_WIDTH_PX || rasterHeight != B1_PRO_RASTER_HEIGHT_PX) {
+            resolveError(call, "invalid-raster", "B1 Pro 50 × 30 mm printing requires a 576 × 354 packed raster.", null, deviceId, false);
+            return;
+        }
+
+        String rasterBase64 = call.getString("rasterBase64");
+        byte[] packedRaster;
+        try {
+            packedRaster = Base64.decode(rasterBase64 == null ? "" : rasterBase64, Base64.DEFAULT);
+            NiimbotV4Protocol.buildRowCommands(packedRaster, rasterWidth, rasterHeight);
+        } catch (IllegalArgumentException exception) {
+            resolveError(call, "invalid-raster", messageOrDefault(exception, "The packed B1 Pro raster payload is invalid."), null, deviceId, false);
+            return;
+        }
+
+        int copies = Math.max(1, Math.min(call.getInt("copies", 1), 99));
+        long printTimeoutMs = Math.max(5_000L, call.getLong("timeoutMs", PRINT_CONFIRM_TIMEOUT_MS));
+        connectInternal(call, deviceId, true, false, identifiedPrinter -> startPrintTransfer(call, deviceId, packedRaster, copies, printTimeoutMs));
+    }
+
+    private void startPrintTransfer(PluginCall call, String deviceId, byte[] packedRaster, int copies, long printTimeoutMs) {
+        PrintSession session = new PrintSession(call, deviceId, copies);
+        activePrintSession = session;
+        session.stage = "sending";
+        try {
+            sendWait(NiimbotV4Protocol.COMMAND_SET_DENSITY, new byte[] { 0x03 }, NiimbotV4Protocol.RESPONSE_SET_DENSITY, COMMAND_TIMEOUT_MS, densityResponse -> {
+                if (!requireResponse(session, densityResponse, "SetDensity")) return;
+                sendWait(NiimbotV4Protocol.COMMAND_SET_LABEL_TYPE, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_SET_LABEL_TYPE, COMMAND_TIMEOUT_MS, labelTypeResponse -> {
+                    if (!requireResponse(session, labelTypeResponse, "SetLabelType")) return;
+                    sendWait(NiimbotV4Protocol.COMMAND_PRINT_START, NiimbotV4Protocol.printStartPayload(copies, 1), NiimbotV4Protocol.RESPONSE_PRINT_START, COMMAND_TIMEOUT_MS, startResponse -> {
+                        if (!requireResponse(session, startResponse, "PrintStart")) return;
+                        sendPrintStatusProbeThenPage(session, packedRaster, printTimeoutMs);
+                    });
+                });
+            });
+        } catch (Exception exception) {
+            failPrint(session, "transmission-failed", messageOrDefault(exception, "Unable to start NIIMBOT B1 Pro print transfer."), true);
+        }
+    }
+
+    private void sendPrintStatusProbeThenPage(PrintSession session, byte[] packedRaster, long printTimeoutMs) {
+        try {
+            writeRaw(NiimbotV4Protocol.pack(NiimbotV4Protocol.COMMAND_PRINT_STATUS, new byte[] { 0x01 }));
+            mainHandler.postDelayed(() -> sendPage(session, packedRaster, printTimeoutMs), 30L);
+        } catch (Exception exception) {
+            failPrint(session, "transmission-failed", messageOrDefault(exception, "Unable to send NIIMBOT print-status probe."), true);
+        }
+    }
+
+    private void sendPage(PrintSession session, byte[] packedRaster, long printTimeoutMs) {
+        try {
+            sendWait(NiimbotV4Protocol.COMMAND_SET_PAGE_SIZE, NiimbotV4Protocol.setPageSizePayload(B1_PRO_RASTER_HEIGHT_PX, B1_PRO_RASTER_WIDTH_PX), NiimbotV4Protocol.RESPONSE_SET_PAGE_SIZE, COMMAND_TIMEOUT_MS, pageSizeResponse -> {
+                if (!requireResponse(session, pageSizeResponse, "SetPageSize")) return;
+                try {
+                    List<NiimbotV4Protocol.RowCommand> rowCommands = NiimbotV4Protocol.buildRowCommands(packedRaster, B1_PRO_RASTER_WIDTH_PX, B1_PRO_RASTER_HEIGHT_PX);
+                    for (NiimbotV4Protocol.RowCommand rowCommand : rowCommands) {
+                        writeRaw(NiimbotV4Protocol.pack(rowCommand.command, rowCommand.data));
+                    }
+                    sendWait(NiimbotV4Protocol.COMMAND_PAGE_END, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_PAGE_END, PAGE_END_TIMEOUT_MS, pageEndResponse -> {
+                        if (!requireResponse(session, pageEndResponse, "PageEnd")) return;
+                        session.stage = "printing-confirming";
+                        session.deadlineAtMs = System.currentTimeMillis() + printTimeoutMs;
+                        pollPrintStatus(session);
+                    });
+                } catch (Exception exception) {
+                    failPrint(session, "transmission-failed", messageOrDefault(exception, "Unable to transfer packed label rows to the NIIMBOT B1 Pro."), true);
+                }
+            });
+        } catch (Exception exception) {
+            failPrint(session, "transmission-failed", messageOrDefault(exception, "Unable to send NIIMBOT page setup."), true);
+        }
+    }
+
+    private void pollPrintStatus(PrintSession session) {
+        if (session.resolved) return;
+        if (System.currentTimeMillis() > session.deadlineAtMs) {
+            failPrint(session, "timeout", "Timed out waiting for the NIIMBOT B1 Pro to confirm the printed label.", true);
+            return;
+        }
+        try {
+            sendWait(NiimbotV4Protocol.COMMAND_PRINT_STATUS, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_PRINT_STATUS, COMMAND_TIMEOUT_MS, statusResponse -> {
+                NiimbotV4Protocol.PrintStatus status = NiimbotV4Protocol.parsePrintStatus(toProtocolResponse(statusResponse));
+                String failure = NiimbotV4Protocol.mapPrinterStatusFailure(status, session.copies);
+                if (failure == null) {
+                    finishPrint(session);
+                    return;
+                }
+                if ("unconfirmed-print".equals(failure)) {
+                    failPrint(session, "unconfirmed-print", "The printer reported the page but did not confirm print/feed completion. Inspect the physical label before retrying.", true);
+                    return;
+                }
+                mainHandler.postDelayed(() -> pollPrintStatus(session), PRINT_STATUS_POLL_MS);
+            });
+        } catch (Exception exception) {
+            failPrint(session, "printer-status", messageOrDefault(exception, "Unable to read NIIMBOT print status."), true);
+        }
+    }
+
+    private void finishPrint(PrintSession session) {
+        try {
+            sendWait(NiimbotV4Protocol.COMMAND_PRINT_END, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_PRINT_END, COMMAND_TIMEOUT_MS, endResponse -> {
+                if (!requireResponse(session, endResponse, "PrintEnd")) return;
+                session.stage = "success";
+                JSObject value = new JSObject();
+                value.put("jobId", "niimbot-b1-pro-" + System.currentTimeMillis());
+                value.put("deviceId", session.deviceId);
+                value.put("modelId", NIIMBOT_B1_PRO_MODEL_ID);
+                value.put("profileId", PROFILE_ID);
+                value.put("status", "success");
+                value.put("confirmed", true);
+                value.put("copies", session.copies);
+                resolvePrint(session, value);
+            });
+        } catch (Exception exception) {
+            failPrint(session, "unconfirmed-print", messageOrDefault(exception, "The label printed, but final NIIMBOT PrintEnd confirmation failed. Inspect the physical label before retrying."), true);
+        }
+    }
+
+    private boolean requireResponse(PrintSession session, NiimbotResponse response, String operation) {
+        if (response != null) return true;
+        failPrint(session, "timeout", "Timed out waiting for NIIMBOT " + operation + " confirmation.", true);
+        return false;
+    }
+
+    private NiimbotV4Protocol.NiimbotResponse toProtocolResponse(NiimbotResponse response) {
+        if (response == null) return null;
+        return new NiimbotV4Protocol.NiimbotResponse(response.command, response.data);
+    }
+
+    private void failPrint(PrintSession session, String code, String message, boolean recoverable) {
+        if (session == null || session.resolved) return;
+        session.resolved = true;
+        if (activePrintSession == session) activePrintSession = null;
+        resolveError(session.call, code, message, NIIMBOT_B1_PRO_MODEL_ID, session.deviceId, recoverable);
+    }
+
+    private void resolvePrint(PrintSession session, JSObject value) {
+        if (session == null || session.resolved) return;
+        session.resolved = true;
+        if (activePrintSession == session) activePrintSession = null;
+        session.call.resolve(ok(value));
     }
 
     private JSObject permissionStatus() {
@@ -372,7 +515,11 @@ public class NativePrintPlugin extends Plugin {
                     currentDeviceId = deviceId;
                     gatt.discoverServices();
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                    PrintSession session = activePrintSession;
                     closeGatt(gatt);
+                    if (session != null && !session.resolved) {
+                        failPrint(session, "disconnect", "The NIIMBOT B1 Pro disconnected during printing. Inspect the physical label before retrying.", true);
+                    }
                 }
             }
 
@@ -440,15 +587,13 @@ public class NativePrintPlugin extends Plugin {
 
     private void identifyConnectedPrinter(PluginCall call, BluetoothDevice device, boolean persist, IdentifySuccess success) {
         try {
-            writeRaw(new byte[] { 0x03, 0x55, 0x55, (byte) 0xC1, 0x01, 0x01, (byte) 0xC1, (byte) 0xAA, (byte) 0xAA });
+            writeRaw(NiimbotV4Protocol.INITIAL_CONNECTION_PACKET);
             mainHandler.postDelayed(() -> sendWait(0x40, new byte[] { 0x08 }, 0x48, IDENTIFY_TIMEOUT_MS, response -> {
-                if (response == null || response.data.length < 1) {
+                int modelId = NiimbotV4Protocol.parseModelId(toProtocolResponse(response));
+                if (modelId < 0) {
                     resolveError(call, "identification-failed", "The selected printer did not report a model id.", null, device.getAddress(), true);
                     return;
                 }
-                int modelId = response.data.length >= 2
-                        ? ((response.data[0] & 0xff) << 8) | (response.data[1] & 0xff)
-                        : ((response.data[0] & 0xff) << 8);
 
                 if (modelId != NIIMBOT_B1_PRO_MODEL_ID) {
                     String message = modelId == NIIMBOT_B1_MODEL_ID
@@ -482,25 +627,7 @@ public class NativePrintPlugin extends Plugin {
                 pending.callback.onResponse(null);
             }
         }, timeoutMs);
-        writeRaw(pack(command, data));
-    }
-
-    private byte[] pack(int command, byte[] data) {
-        byte[] payload = data == null ? new byte[0] : data;
-        byte[] packet = new byte[7 + payload.length];
-        packet[0] = 0x55;
-        packet[1] = 0x55;
-        packet[2] = (byte) command;
-        packet[3] = (byte) payload.length;
-        int crc = command ^ payload.length;
-        for (int i = 0; i < payload.length; i++) {
-            packet[4 + i] = payload[i];
-            crc ^= payload[i] & 0xff;
-        }
-        packet[4 + payload.length] = (byte) (crc & 0xff);
-        packet[5 + payload.length] = (byte) 0xaa;
-        packet[6 + payload.length] = (byte) 0xaa;
-        return packet;
+        writeRaw(NiimbotV4Protocol.pack(command, data));
     }
 
     @SuppressLint("MissingPermission")
@@ -516,15 +643,11 @@ public class NativePrintPlugin extends Plugin {
     }
 
     private void handleNotification(byte[] value) {
-        if (value == null || value.length < 7) return;
-        if ((value[0] & 0xff) != 0x55 || (value[1] & 0xff) != 0x55) return;
-        int command = value[2] & 0xff;
-        int length = value[3] & 0xff;
-        if (value.length < 7 + length) return;
-        byte[] data = Arrays.copyOfRange(value, 4, 4 + length);
-        ResponseWaiter waiter = responseWaiters.remove(command);
+        NiimbotV4Protocol.NiimbotResponse parsed = NiimbotV4Protocol.unpack(value);
+        if (parsed == null) return;
+        ResponseWaiter waiter = responseWaiters.remove(parsed.command);
         if (waiter != null) {
-            waiter.callback.onResponse(new NiimbotResponse(command, data));
+            waiter.callback.onResponse(new NiimbotResponse(parsed.command, parsed.data));
         }
     }
 
@@ -661,6 +784,21 @@ public class NativePrintPlugin extends Plugin {
             return java.time.Instant.now().toString();
         }
         return new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(new java.util.Date());
+    }
+
+    private static class PrintSession {
+        final PluginCall call;
+        final String deviceId;
+        final int copies;
+        boolean resolved;
+        long deadlineAtMs;
+        String stage;
+
+        PrintSession(PluginCall call, String deviceId, int copies) {
+            this.call = call;
+            this.deviceId = deviceId;
+            this.copies = copies;
+        }
     }
 
     private interface ResponseCallback {
