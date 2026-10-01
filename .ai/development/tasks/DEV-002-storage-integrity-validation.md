@@ -55,3 +55,7 @@ Build:
 
 Human testing:
 - Ready for human testing on branch `agent/dev-002-storage-integrity-validation`.
+- Human testing accepted by Felipe on 2026-10-01: "dev team human tests OK. approved".
+
+Merge status:
+- Human testing approved; not merged into main in this worktree.
