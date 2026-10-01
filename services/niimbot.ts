@@ -121,10 +121,18 @@ export interface NiimbotBridgeDevice {
   readonly advertisedServiceUuids?: readonly string[];
 }
 
-export interface NiimbotBridgeIdentifiedPrinter extends NiimbotBridgeDevice {
+export interface NiimbotBridgeSelectedPrinter extends NiimbotBridgeDevice {
   readonly modelId: typeof NIIMBOT_B1_PRO_MODEL_ID;
+  readonly displayName: string;
+  readonly reconnectId: string;
+  readonly profileId: typeof B1_PRO_50X30_PROFILE.id;
   readonly profile: typeof B1_PRO_50X30_PROFILE;
+  readonly serviceUuid: typeof NIIMBOT_B1_PRO_SERVICE_UUID;
+  readonly characteristicUuid: typeof NIIMBOT_B1_PRO_CHARACTERISTIC_UUID;
+  readonly identifiedAt: string;
 }
+
+export type NiimbotBridgeIdentifiedPrinter = NiimbotBridgeSelectedPrinter;
 
 export interface NiimbotBridgeScanOptions {
   readonly serviceUuid?: string;
@@ -192,6 +200,8 @@ export interface NiimbotNativeBlePrinterPlugin {
   scan(options?: NiimbotBridgeScanOptions): Promise<NiimbotBridgeResult<readonly NiimbotBridgeDevice[]>>;
   connect(options: NiimbotBridgeConnectOptions): Promise<NiimbotBridgeResult<NiimbotBridgeDevice>>;
   identify(options: NiimbotBridgeConnectOptions): Promise<NiimbotBridgeResult<NiimbotBridgeIdentifiedPrinter>>;
+  getSelectedPrinter(): Promise<NiimbotBridgeResult<NiimbotBridgeSelectedPrinter | null>>;
+  forgetSelectedPrinter(): Promise<NiimbotBridgeResult<{ readonly forgotten: true }>>;
   printLabel(options: NiimbotBridgePrintOptions): Promise<NiimbotBridgeResult<NiimbotBridgePrintResult>>;
   disconnect(options: NiimbotBridgeConnectOptions): Promise<NiimbotBridgeResult<{ readonly deviceId: string }>>;
 }

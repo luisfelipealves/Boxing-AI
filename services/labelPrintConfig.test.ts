@@ -8,6 +8,7 @@ import {
   NIIMBOT_B1_PRO_SERVICE_UUID,
   type NiimbotBridgeErrorCode,
   type NiimbotBridgePrintOptions,
+  type NiimbotBridgeSelectedPrinter,
   assertSupportedNiimbotModel,
   getNiimbotModelSupport,
   isSupportedNiimbotModel,
@@ -127,5 +128,30 @@ describe('Niimbot B1 Pro label print config', () => {
     });
     expect(supportedErrorCodes).toContain('unsupported-model');
     expect(supportedErrorCodes).toContain('unconfirmed-print');
+  });
+
+  it('defines persisted selected-printer metadata needed for display and reconnect', () => {
+    const selectedPrinter = {
+      deviceId: 'android-device-id',
+      address: 'AA:BB:CC:DD:EE:FF',
+      name: 'B1 Pro-I304050285',
+      displayName: 'B1 Pro-I304050285',
+      reconnectId: 'AA:BB:CC:DD:EE:FF',
+      modelId: NIIMBOT_B1_PRO_MODEL_ID,
+      profileId: B1_PRO_50X30_PROFILE.id,
+      profile: B1_PRO_50X30_PROFILE,
+      serviceUuid: NIIMBOT_B1_PRO_SERVICE_UUID,
+      characteristicUuid: NIIMBOT_B1_PRO_CHARACTERISTIC_UUID,
+      identifiedAt: '2026-10-01T00:00:00.000Z',
+    } satisfies NiimbotBridgeSelectedPrinter;
+
+    expect(selectedPrinter).toMatchObject({
+      displayName: 'B1 Pro-I304050285',
+      reconnectId: 'AA:BB:CC:DD:EE:FF',
+      modelId: 4097,
+      profileId: 'niimbot-b1-pro-50x30',
+      serviceUuid: B1_PRO_50X30_PROFILE.serviceUuid,
+      characteristicUuid: B1_PRO_50X30_PROFILE.characteristicUuid,
+    });
   });
 });

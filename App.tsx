@@ -48,12 +48,9 @@ import * as storage from './services/storageService';
 import { analyzeItemImage, analyzeItemAudio, createInventoryChat } from './services/geminiService';
 import { getGeminiApiKey, setStoredGeminiApiKey } from './services/geminiKeyService';
 import { LABEL_PRINT_CONFIG, buildBoxQrValue } from './services/labelPrintConfig';
+import { B1_PRO_50X30_PROFILE, type NiimbotNativeBlePrinterPlugin } from './services/niimbot';
 
-interface NativePrintPlugin {
-  print(): Promise<void>;
-}
-
-const NativePrint = registerPlugin<NativePrintPlugin>('NativePrint');
+const NiimbotBlePrinter = registerPlugin<NiimbotNativeBlePrinterPlugin>('NiimbotBlePrinter');
 
 const printLabel = async () => {
   const platform = Capacitor.getPlatform();
@@ -66,21 +63,40 @@ const printLabel = async () => {
     return;
   }
 
-  if (!Capacitor.isPluginAvailable('NativePrint')) {
-    const error = new Error('NativePrint plugin is not available in the Android build');
-    console.error('[PRINT] native plugin unavailable', error);
-    alert('Printing is not available in this Android build.');
+  if (!Capacitor.isPluginAvailable('NiimbotBlePrinter')) {
+    const error = new Error('NiimbotBlePrinter plugin is not available in the Android build');
+    console.error('[PRINT] native BLE plugin unavailable', error);
+    alert('Direct Bluetooth printing is not available in this Android build.');
     return;
   }
 
-  console.info('[PRINT] native plugin available');
+  console.info('[PRINT] native BLE plugin available');
   try {
-    console.info('[PRINT] calling native print');
-    await NativePrint.print();
-    console.info('[PRINT] native print started');
+    const selected = await NiimbotBlePrinter.getSelectedPrinter();
+    if (!selected.ok || !selected.value) {
+      alert('Connect and identify a NIIMBOT B1 Pro before printing.');
+      return;
+    }
+
+    const result = await NiimbotBlePrinter.printLabel({
+      deviceId: selected.value.reconnectId,
+      profileId: B1_PRO_50X30_PROFILE.id,
+      rasterBase64: '',
+      rasterWidthPx: B1_PRO_50X30_PROFILE.rasterWidthPx,
+      rasterHeightPx: B1_PRO_50X30_PROFILE.rasterHeightPx,
+      copies: 1,
+    });
+
+    if (!result.ok) {
+      console.error('[PRINT] native BLE print failed:', result.error);
+      alert(result.error.message);
+      return;
+    }
+
+    console.info('[PRINT] native BLE print confirmed', result.value);
   } catch (error) {
-    console.error('[PRINT] native print failed:', error);
-    alert('Unable to start printing. Check the Android print service and try again.');
+    console.error('[PRINT] native BLE print failed:', error);
+    alert('Unable to print to the NIIMBOT B1 Pro. Check Bluetooth and try again.');
   }
 };
 const getBlockedDeleteMessage = (error: unknown): string | undefined => {
