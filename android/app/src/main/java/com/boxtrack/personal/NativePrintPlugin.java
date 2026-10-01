@@ -85,6 +85,7 @@ public class NativePrintPlugin extends Plugin {
     private BluetoothGattCharacteristic currentCharacteristic;
     private String currentDeviceId;
     private PrintSession activePrintSession;
+    private Runnable pendingAfterNotificationsEnabled;
 
     @PluginMethod
     public void checkPermissions(PluginCall call) {
@@ -550,14 +551,31 @@ public class NativePrintPlugin extends Plugin {
 
                 currentGatt = gatt;
                 currentCharacteristic = characteristic;
-                enableNotifications(gatt, characteristic);
+                Runnable afterNotificationsEnabled = () -> {
+                    if (!identify) {
+                        call.resolve(ok(deviceObject(device, null, null)));
+                        return;
+                    }
 
-                if (!identify) {
-                    call.resolve(ok(deviceObject(device, null, null)));
+                    identifyConnectedPrinter(call, device, persistOnIdentify, success);
+                };
+
+                if (!enableNotifications(gatt, characteristic, afterNotificationsEnabled)) {
+                    afterNotificationsEnabled.run();
+                }
+            }
+
+            @Override
+            public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
+                if (!CLIENT_CHARACTERISTIC_CONFIG_UUID.equals(descriptor.getUuid())) return;
+                Runnable pending = pendingAfterNotificationsEnabled;
+                pendingAfterNotificationsEnabled = null;
+                if (pending == null) return;
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    resolveError(call, "connection-failed", "Unable to enable BLE notifications on the selected printer.", null, deviceId, true);
                     return;
                 }
-
-                identifyConnectedPrinter(call, device, persistOnIdentify, success);
+                pending.run();
             }
 
             @Override
@@ -583,13 +601,18 @@ public class NativePrintPlugin extends Plugin {
     }
 
     @SuppressLint("MissingPermission")
-    private void enableNotifications(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
+    private boolean enableNotifications(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, Runnable afterEnabled) {
         gatt.setCharacteristicNotification(characteristic, true);
         BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG_UUID);
         if (descriptor != null) {
             descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-            gatt.writeDescriptor(descriptor);
+            pendingAfterNotificationsEnabled = afterEnabled;
+            if (gatt.writeDescriptor(descriptor)) {
+                return true;
+            }
+            pendingAfterNotificationsEnabled = null;
         }
+        return false;
     }
 
     private void identifyConnectedPrinter(PluginCall call, BluetoothDevice device, boolean persist, IdentifySuccess success) {
@@ -767,6 +790,7 @@ public class NativePrintPlugin extends Plugin {
         currentGatt = null;
         currentCharacteristic = null;
         currentDeviceId = null;
+        pendingAfterNotificationsEnabled = null;
         responseWaiters.clear();
     }
 
