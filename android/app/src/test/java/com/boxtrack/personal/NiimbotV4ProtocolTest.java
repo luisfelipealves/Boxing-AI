@@ -3,12 +3,33 @@ package com.boxtrack.personal;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
+import org.json.JSONObject;
 
 import java.util.List;
 
 public class NiimbotV4ProtocolTest {
+    @Test
+    public void fixedB1ProSelectionMetadataDoesNotRequireReportedModelId() throws Exception {
+        JSONObject selected = NativePrintPlugin.fixedB1ProSelectedPrinterObject(
+                "AA:BB:CC:DD:EE:FF",
+                "B1 Pro Lab",
+                "2026-10-01T00:00:00Z"
+        );
+
+        assertEquals("AA:BB:CC:DD:EE:FF", selected.getString("deviceId"));
+        assertEquals("AA:BB:CC:DD:EE:FF", selected.getString("reconnectId"));
+        assertEquals("B1 Pro Lab", selected.getString("displayName"));
+        assertEquals(4097, selected.getInt("modelId"));
+        assertEquals("niimbot-b1-pro-50x30", selected.getString("profileId"));
+        assertEquals("e7810a71-73ae-499d-8c15-faa9aef0c3f2", selected.getString("serviceUuid"));
+        assertEquals("bef8d6c9-9c21-4c9e-b632-bd58c1009f9f", selected.getString("characteristicUuid"));
+        assertEquals(4097, selected.getJSONObject("profile").getInt("modelId"));
+        assertTrue(selected.has("identifiedAt"));
+    }
+
     @Test
     public void packUsesV4FrameMarkersLengthAndXorChecksum() {
         byte[] frame = NiimbotV4Protocol.pack(0x40, new byte[] { 0x08 });

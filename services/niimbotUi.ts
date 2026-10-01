@@ -67,8 +67,8 @@ const ERROR_PRESENTATIONS: Record<NiimbotBridgeErrorCode, Omit<NiimbotErrorPrese
     action: 'Keep the NIIMBOT B1 Pro awake and nearby, then reconnect or rescan.',
   },
   'identification-failed': {
-    title: 'Could not identify the printer',
-    action: 'Reconnect and let BoxTrack AI verify model id 4097 before saving or printing.',
+    title: 'Could not prepare the B1 Pro',
+    action: 'Reconnect after confirming the NIIMBOT B1 Pro is powered on, awake, and exposing its BLE print channel.',
   },
   'unsupported-model': {
     title: 'This printer is not supported',
