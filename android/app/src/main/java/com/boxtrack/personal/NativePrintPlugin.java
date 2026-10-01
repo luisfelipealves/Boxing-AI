@@ -7,7 +7,6 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
@@ -61,8 +60,6 @@ public class NativePrintPlugin extends Plugin {
 
     private static final UUID NIIMBOT_SERVICE_UUID = UUID.fromString("e7810a71-73ae-499d-8c15-faa9aef0c3f2");
     private static final UUID NIIMBOT_CHARACTERISTIC_UUID = UUID.fromString("bef8d6c9-9c21-4c9e-b632-bd58c1009f9f");
-    private static final UUID CLIENT_CHARACTERISTIC_CONFIG_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
-
     private static final int NIIMBOT_B1_PRO_MODEL_ID = 4097;
     private static final String PROFILE_ID = "niimbot-b1-pro-50x30";
     private static final String PREFS = "niimbot_ble_printer";
@@ -84,7 +81,6 @@ public class NativePrintPlugin extends Plugin {
     private BluetoothGattCharacteristic currentCharacteristic;
     private String currentDeviceId;
     private PrintSession activePrintSession;
-    private PendingNotificationSetup pendingNotificationSetup;
 
     @PluginMethod
     public void checkPermissions(PluginCall call) {
@@ -264,11 +260,11 @@ public class NativePrintPlugin extends Plugin {
         session.stage = "sending";
         try {
             sendWait(NiimbotV4Protocol.COMMAND_SET_DENSITY, new byte[] { 0x03 }, NiimbotV4Protocol.RESPONSE_SET_DENSITY, COMMAND_TIMEOUT_MS, densityResponse -> {
-                if (!requireResponse(session, densityResponse, "SetDensity")) return;
+                logUnconfirmedSetupResponse(densityResponse, "SetDensity");
                 sendWait(NiimbotV4Protocol.COMMAND_SET_LABEL_TYPE, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_SET_LABEL_TYPE, COMMAND_TIMEOUT_MS, labelTypeResponse -> {
-                    if (!requireResponse(session, labelTypeResponse, "SetLabelType")) return;
+                    logUnconfirmedSetupResponse(labelTypeResponse, "SetLabelType");
                     sendWait(NiimbotV4Protocol.COMMAND_PRINT_START, NiimbotV4Protocol.printStartPayload(copies, 1), NiimbotV4Protocol.RESPONSE_PRINT_START, COMMAND_TIMEOUT_MS, startResponse -> {
-                        if (!requireResponse(session, startResponse, "PrintStart")) return;
+                        logUnconfirmedSetupResponse(startResponse, "PrintStart");
                         session.transferStarted = true;
                         sendPrintStatusProbeThenPage(session, packedRaster, printTimeoutMs);
                     });
@@ -291,9 +287,10 @@ public class NativePrintPlugin extends Plugin {
     private void sendPage(PrintSession session, byte[] packedRaster, long printTimeoutMs) {
         try {
             sendWait(NiimbotV4Protocol.COMMAND_SET_PAGE_SIZE, NiimbotV4Protocol.setPageSizePayload(B1_PRO_RASTER_HEIGHT_PX, B1_PRO_RASTER_WIDTH_PX), NiimbotV4Protocol.RESPONSE_SET_PAGE_SIZE, COMMAND_TIMEOUT_MS, pageSizeResponse -> {
-                if (!requireResponse(session, pageSizeResponse, "SetPageSize")) return;
+                logUnconfirmedSetupResponse(pageSizeResponse, "SetPageSize");
                 try {
                     List<NiimbotV4Protocol.RowCommand> rowCommands = NiimbotV4Protocol.buildRowCommands(packedRaster, B1_PRO_RASTER_WIDTH_PX, B1_PRO_RASTER_HEIGHT_PX);
+                    session.transferStarted = true;
                     for (NiimbotV4Protocol.RowCommand rowCommand : rowCommands) {
                         writeRaw(NiimbotV4Protocol.pack(rowCommand.command, rowCommand.data));
                     }
@@ -361,6 +358,12 @@ public class NativePrintPlugin extends Plugin {
         if (response != null) return true;
         failPrint(session, "timeout", "Timed out waiting for NIIMBOT " + operation + " confirmation.", true);
         return false;
+    }
+
+    private void logUnconfirmedSetupResponse(NiimbotResponse response, String operation) {
+        if (response == null) {
+            Log.w(TAG, "Continuing NIIMBOT B1 Pro print setup without " + operation + " notification confirmation");
+        }
     }
 
     private NiimbotV4Protocol.NiimbotResponse toProtocolResponse(NiimbotResponse response) {
@@ -506,7 +509,7 @@ public class NativePrintPlugin extends Plugin {
         Runnable timeout = () -> {
             if (!preparationGate.tryFinish()) return;
             closeCurrentGatt();
-            resolveError(call, "connection-failed", "Timed out preparing the NIIMBOT B1 Pro BLE channel.", null, deviceId, true);
+            resolveError(call, "connection-failed", "Timed out discovering the NIIMBOT B1 Pro BLE service and characteristic.", null, deviceId, true);
         };
         mainHandler.postDelayed(timeout, timeoutMs);
 
@@ -534,7 +537,7 @@ public class NativePrintPlugin extends Plugin {
                     if (!preparationGate.isFinished()) {
                         if (preparationGate.tryFinish()) {
                             mainHandler.removeCallbacks(timeout);
-                            resolveError(call, "connection-failed", "The NIIMBOT B1 Pro disconnected while preparing the BLE channel.", null, deviceId, true);
+                            resolveError(call, "connection-failed", "The NIIMBOT B1 Pro disconnected while discovering its BLE service and characteristic.", null, deviceId, true);
                         }
                         return;
                     }
@@ -572,36 +575,15 @@ public class NativePrintPlugin extends Plugin {
 
                 currentGatt = gatt;
                 currentCharacteristic = characteristic;
-                Runnable afterNotificationsEnabled = () -> {
-                    if (!preparationGate.tryFinish()) return;
-                    mainHandler.removeCallbacks(timeout);
-                    if (!identify) {
-                        call.resolve(ok(deviceObject(device, null, null)));
-                        return;
-                    }
-
-                    useFixedB1ProPrinter(call, device, persistOnIdentify, success);
-                };
-
-                if (!enableNotifications(gatt, characteristic, afterNotificationsEnabled)) {
-                    afterNotificationsEnabled.run();
-                }
-            }
-
-            @Override
-            public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-                if (!CLIENT_CHARACTERISTIC_CONFIG_UUID.equals(descriptor.getUuid())) return;
-                PendingNotificationSetup pending = pendingNotificationSetup;
-                pendingNotificationSetup = null;
-                if (pending == null || pending.gatt != gatt) return;
-                if (status != BluetoothGatt.GATT_SUCCESS) {
-                    if (preparationGate.tryFinish()) {
-                        mainHandler.removeCallbacks(timeout);
-                        resolveError(call, "connection-failed", "Unable to enable BLE notifications on the selected printer.", null, deviceId, true);
-                    }
+                listenForNotifications(gatt, characteristic);
+                if (!preparationGate.tryFinish()) return;
+                mainHandler.removeCallbacks(timeout);
+                if (!identify) {
+                    call.resolve(ok(deviceObject(device, null, null)));
                     return;
                 }
-                pending.afterEnabled.run();
+
+                useFixedB1ProPrinter(call, device, persistOnIdentify, success);
             }
 
             @Override
@@ -627,18 +609,12 @@ public class NativePrintPlugin extends Plugin {
     }
 
     @SuppressLint("MissingPermission")
-    private boolean enableNotifications(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, Runnable afterEnabled) {
-        gatt.setCharacteristicNotification(characteristic, true);
-        BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG_UUID);
-        if (descriptor != null) {
-            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-            pendingNotificationSetup = new PendingNotificationSetup(gatt, afterEnabled);
-            if (gatt.writeDescriptor(descriptor)) {
-                return true;
-            }
-            pendingNotificationSetup = null;
+    private void listenForNotifications(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
+        try {
+            gatt.setCharacteristicNotification(characteristic, true);
+        } catch (Exception exception) {
+            Log.w(TAG, "Unable to request local BLE notification routing; print commands will use bounded confirmation waits", exception);
         }
-        return false;
     }
 
     private void useFixedB1ProPrinter(PluginCall call, BluetoothDevice device, boolean persist, IdentifySuccess success) {
@@ -805,7 +781,6 @@ public class NativePrintPlugin extends Plugin {
         currentGatt = null;
         currentCharacteristic = null;
         currentDeviceId = null;
-        pendingNotificationSetup = null;
         responseWaiters.clear();
     }
 
@@ -868,15 +843,6 @@ public class NativePrintPlugin extends Plugin {
         }
     }
 
-    private static class PendingNotificationSetup {
-        final BluetoothGatt gatt;
-        final Runnable afterEnabled;
-
-        PendingNotificationSetup(BluetoothGatt gatt, Runnable afterEnabled) {
-            this.gatt = gatt;
-            this.afterEnabled = afterEnabled;
-        }
-    }
 
     private static class ResponseWaiter {
         final int command;
