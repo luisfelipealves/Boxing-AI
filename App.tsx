@@ -48,57 +48,24 @@ import * as storage from './services/storageService';
 import { analyzeItemImage, analyzeItemAudio, createInventoryChat } from './services/geminiService';
 import { getGeminiApiKey, setStoredGeminiApiKey } from './services/geminiKeyService';
 import { LABEL_PRINT_CONFIG, buildBoxQrValue } from './services/labelPrintConfig';
-import { B1_PRO_50X30_PROFILE, type NiimbotNativeBlePrinterPlugin } from './services/niimbot';
+import {
+  B1_PRO_50X30_PROFILE,
+  type NiimbotBridgeDevice,
+  type NiimbotBridgeError,
+  type NiimbotBridgePermissionsResult,
+  type NiimbotBridgeSelectedPrinter,
+  type NiimbotNativeBlePrinterPlugin,
+} from './services/niimbot';
+import {
+  buildNiimbotPrintRequest,
+  getNiimbotErrorPresentation,
+  isNiimbotPermissionGranted,
+  type NiimbotLabelSnapshot,
+  type NiimbotPrintProgressStep,
+} from './services/niimbotUi';
 
 const NiimbotBlePrinter = registerPlugin<NiimbotNativeBlePrinterPlugin>('NiimbotBlePrinter');
 
-const printLabel = async () => {
-  const platform = Capacitor.getPlatform();
-  console.info('[PRINT] button clicked');
-  console.info(`[PRINT] platform = ${platform}`);
-
-  if (platform !== 'android') {
-    console.info('[PRINT] using browser print');
-    window.print();
-    return;
-  }
-
-  if (!Capacitor.isPluginAvailable('NiimbotBlePrinter')) {
-    const error = new Error('NiimbotBlePrinter plugin is not available in the Android build');
-    console.error('[PRINT] native BLE plugin unavailable', error);
-    alert('Direct Bluetooth printing is not available in this Android build.');
-    return;
-  }
-
-  console.info('[PRINT] native BLE plugin available');
-  try {
-    const selected = await NiimbotBlePrinter.getSelectedPrinter();
-    if (!selected.ok || !selected.value) {
-      alert('Connect and identify a NIIMBOT B1 Pro before printing.');
-      return;
-    }
-
-    const result = await NiimbotBlePrinter.printLabel({
-      deviceId: selected.value.reconnectId,
-      profileId: B1_PRO_50X30_PROFILE.id,
-      rasterBase64: '',
-      rasterWidthPx: B1_PRO_50X30_PROFILE.rasterWidthPx,
-      rasterHeightPx: B1_PRO_50X30_PROFILE.rasterHeightPx,
-      copies: 1,
-    });
-
-    if (!result.ok) {
-      console.error('[PRINT] native BLE print failed:', result.error);
-      alert(result.error.message);
-      return;
-    }
-
-    console.info('[PRINT] native BLE print confirmed', result.value);
-  } catch (error) {
-    console.error('[PRINT] native BLE print failed:', error);
-    alert('Unable to print to the NIIMBOT B1 Pro. Check Bluetooth and try again.');
-  }
-};
 const getBlockedDeleteMessage = (error: unknown): string | undefined => {
   if (!storage.isDeleteBlockedByDependenciesError(error)) return undefined;
 
@@ -1457,6 +1424,15 @@ const BoxLabelPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [box, setBox] = useState<Box | null>(null);
+  const [permissions, setPermissions] = useState<NiimbotBridgePermissionsResult | null>(null);
+  const [selectedPrinter, setSelectedPrinter] = useState<NiimbotBridgeSelectedPrinter | null>(null);
+  const [candidates, setCandidates] = useState<readonly NiimbotBridgeDevice[]>([]);
+  const [step, setStep] = useState<NiimbotPrintProgressStep>('permission/setup');
+  const [error, setError] = useState<NiimbotBridgeError | null>(null);
+  const [isBusy, setIsBusy] = useState(false);
+  const [lastLabelSnapshot, setLastLabelSnapshot] = useState<NiimbotLabelSnapshot | null>(null);
+  const isAndroid = Capacitor.getPlatform() === 'android';
+  const isPluginAvailable = Capacitor.isPluginAvailable('NiimbotBlePrinter');
 
   useEffect(() => {
     if (!id) return;
@@ -1465,10 +1441,35 @@ const BoxLabelPage = () => {
     });
   }, [id]);
 
+  useEffect(() => {
+    if (!isAndroid || !isPluginAvailable) return;
+    let cancelled = false;
+    const loadPrinterState = async () => {
+      setStep('permission/setup');
+      const [permissionResult, selectedResult] = await Promise.all([
+        NiimbotBlePrinter.checkPermissions(),
+        NiimbotBlePrinter.getSelectedPrinter(),
+      ]);
+      if (cancelled) return;
+      if (permissionResult.ok) setPermissions(permissionResult.value);
+      if (selectedResult.ok) setSelectedPrinter(selectedResult.value);
+      if (!permissionResult.ok) setError(permissionResult.error);
+      if (!selectedResult.ok) setError(selectedResult.error);
+    };
+    loadPrinterState();
+    return () => { cancelled = true; };
+  }, [isAndroid, isPluginAvailable]);
+
   if (!id || !box) return <PageLoader />;
 
   // URL format: Current Origin + /#/box/ID
   const qrValue = buildBoxQrValue(window.location.origin, window.location.pathname, id);
+  const labelSnapshot: NiimbotLabelSnapshot = {
+    qrValue,
+    boxId: id,
+    boxNumber: box.boxNumber,
+    boxName: box.name,
+  };
   const labelStyle: React.CSSProperties = {
     width: LABEL_PRINT_CONFIG.cssWidth,
     height: LABEL_PRINT_CONFIG.cssHeight,
@@ -1477,25 +1478,315 @@ const BoxLabelPage = () => {
     width: `${LABEL_PRINT_CONFIG.qrSizeMm}mm`,
     height: `${LABEL_PRINT_CONFIG.qrSizeMm}mm`,
   };
+  const profile = B1_PRO_50X30_PROFILE;
+  const canPrint = isAndroid && isPluginAvailable && isNiimbotPermissionGranted(permissions) && Boolean(selectedPrinter) && !isBusy;
+  const visibleError = error ? getNiimbotErrorPresentation(error) : null;
+
+  const setBridgeError = (bridgeError: NiimbotBridgeError) => {
+    setError(bridgeError);
+    setStep('failure');
+  };
+
+  const requestPermissions = async () => {
+    if (!isPluginAvailable) return;
+    setIsBusy(true);
+    setError(null);
+    setStep('permission/setup');
+    try {
+      const result = await NiimbotBlePrinter.requestPermissions();
+      if (!result.ok) {
+        setBridgeError(result.error);
+        return;
+      }
+      setPermissions(result.value);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const scanForPrinters = async () => {
+    if (!isPluginAvailable) return;
+    setIsBusy(true);
+    setError(null);
+    setStep('scanning');
+    try {
+      const result = await NiimbotBlePrinter.scan({ serviceUuid: profile.serviceUuid, timeoutMs: 10_000 });
+      if (!result.ok) {
+        setBridgeError(result.error);
+        return;
+      }
+      setCandidates(result.value);
+      if (result.value.length === 0) {
+        setBridgeError({ code: 'no-printer-found', message: 'No NIIMBOT B1 Pro candidates were found.', recoverable: true });
+      }
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const connectAndIdentify = async (device: NiimbotBridgeDevice) => {
+    setIsBusy(true);
+    setError(null);
+    setStep('connecting');
+    try {
+      const connectionResult = await NiimbotBlePrinter.connect({ deviceId: device.deviceId, timeoutMs: 10_000 });
+      if (!connectionResult.ok) {
+        setBridgeError(connectionResult.error);
+        return;
+      }
+      setStep('identifying');
+      const identifyResult = await NiimbotBlePrinter.identify({ deviceId: device.deviceId, timeoutMs: 10_000 });
+      if (!identifyResult.ok) {
+        setBridgeError(identifyResult.error);
+        return;
+      }
+      setSelectedPrinter(identifyResult.value);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const reconnectSelectedPrinter = async () => {
+    if (!selectedPrinter) return;
+    await connectAndIdentify({
+      deviceId: selectedPrinter.reconnectId,
+      name: selectedPrinter.displayName,
+      address: selectedPrinter.address,
+    });
+  };
+
+  const forgetPrinter = async () => {
+    if (!isPluginAvailable) return;
+    setIsBusy(true);
+    setError(null);
+    setStep('permission/setup');
+    try {
+      const result = await NiimbotBlePrinter.forgetSelectedPrinter();
+      if (!result.ok) {
+        setBridgeError(result.error);
+        return;
+      }
+      setSelectedPrinter(null);
+      setCandidates([]);
+      setLastLabelSnapshot(null);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const printCurrentLabel = async () => {
+    const snapshot = lastLabelSnapshot ?? labelSnapshot;
+    setLastLabelSnapshot(snapshot);
+    if (!selectedPrinter) return;
+    setIsBusy(true);
+    setError(null);
+    try {
+      setStep('identifying');
+      const identifyResult = await NiimbotBlePrinter.identify({ deviceId: selectedPrinter.reconnectId, timeoutMs: 10_000 });
+      if (!identifyResult.ok) {
+        setBridgeError(identifyResult.error);
+        return;
+      }
+      setSelectedPrinter(identifyResult.value);
+      setStep('rendering');
+      const request = buildNiimbotPrintRequest(identifyResult.value.reconnectId, snapshot);
+      setStep('sending');
+      const result = await NiimbotBlePrinter.printLabel(request);
+      if (!result.ok) {
+        setBridgeError(result.error);
+        return;
+      }
+      setStep(result.value.confirmed ? 'success' : 'printing/confirming');
+      if (!result.value.confirmed) {
+        setBridgeError({
+          code: 'unconfirmed-print',
+          message: 'The B1 Pro transfer finished but print confirmation was not received.',
+          recoverable: true,
+        });
+        return;
+      }
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const retrySameLabel = async () => {
+    if (!selectedPrinter || !lastLabelSnapshot) return;
+    await printCurrentLabel();
+  };
 
   return (
     <div className="min-h-screen bg-white print:min-h-0 print:w-[50mm] print:h-[30mm] print:overflow-hidden">
-      <div className="print:hidden p-4">
+      <div className="print:hidden p-4 space-y-4 bg-gray-50 dark:bg-gray-950 min-h-screen">
         <button
           onClick={() => navigate(-1)}
-          className="mb-4 flex items-center gap-2 text-gray-600 hover:bg-gray-100 p-2 rounded-lg"
+          className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded-lg"
         >
           <ChevronLeft size={20} /> Back
         </button>
-        <div className="bg-blue-50 p-4 rounded-xl text-blue-800 text-sm mb-4 border border-blue-100">
-          ℹ️ Connect your Niimbot B1 Pro and print on a fixed 50 × 30 mm label.
+
+        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0">
+              <Printer size={22} />
+            </div>
+            <div>
+              <h2 className="font-bold text-gray-900 dark:text-white">Direct NIIMBOT B1 Pro printing</h2>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                On Android, BoxTrack AI connects directly to a NIIMBOT B1 Pro over Bluetooth BLE without leaving the app.
+              </p>
+            </div>
+          </div>
         </div>
-        <button
-          onClick={printLabel}
-          className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-        >
-          <Printer size={20} /> Print 50 × 30 mm Niimbot Label
-        </button>
+
+        {!isAndroid && (
+          <div className="bg-amber-50 text-amber-900 border border-amber-200 p-4 rounded-2xl text-sm">
+            This device shows a browser label preview only. Supported production printing is the Android direct Bluetooth connection to a NIIMBOT B1 Pro.
+            <button
+              onClick={() => window.print()}
+              className="mt-3 w-full bg-amber-600 text-white font-semibold py-2 rounded-xl hover:bg-amber-700 transition-colors"
+            >
+              Print browser preview
+            </button>
+          </div>
+        )}
+
+        {isAndroid && !isPluginAvailable && (
+          <div className="bg-red-50 text-red-800 border border-red-100 p-4 rounded-2xl text-sm">
+            Direct Bluetooth printing is not available in this Android build. Install a build that includes the NiimbotBlePrinter plugin.
+          </div>
+        )}
+
+        <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+          <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Label to print</h3>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-gray-500 dark:text-gray-400">Box number</p>
+              <p className="font-mono font-bold text-gray-900 dark:text-white">{box.boxNumber ?? '—'}</p>
+            </div>
+            <div>
+              <p className="text-gray-500 dark:text-gray-400">Profile</p>
+              <p className="font-semibold text-gray-900 dark:text-white">{profile.labelName}</p>
+            </div>
+            <div>
+              <p className="text-gray-500 dark:text-gray-400">Printer target</p>
+              <p className="font-semibold text-gray-900 dark:text-white">NIIMBOT B1 Pro</p>
+            </div>
+            <div>
+              <p className="text-gray-500 dark:text-gray-400">Raster</p>
+              <p className="font-semibold text-gray-900 dark:text-white">{profile.rasterWidthPx} × {profile.rasterHeightPx}px</p>
+            </div>
+          </div>
+        </div>
+
+        {isAndroid && isPluginAvailable && (
+          <div className="space-y-4">
+            <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h3 className="font-semibold text-gray-900 dark:text-white">B1 Pro setup</h3>
+                {isBusy && <Loader2 className="animate-spin text-indigo-500" size={18} />}
+              </div>
+              <ol className="space-y-2 text-sm">
+                {[
+                  ['permission/setup', 'Grant Bluetooth access'],
+                  ['scanning', 'Scan for NIIMBOT B1 Pro'],
+                  ['connecting', 'Connect to selected printer'],
+                  ['identifying', 'Identify model id 4097'],
+                  ['rendering', 'Render 50 × 30 mm label'],
+                  ['sending', 'Send over BLE'],
+                  ['printing/confirming', 'Confirm print result'],
+                ].map(([stepId, label]) => (
+                  <li key={stepId} className={`flex items-center gap-2 ${step === stepId ? 'text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {step === stepId ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
+                    {label}
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            {!isNiimbotPermissionGranted(permissions) && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100 border border-blue-100 dark:border-blue-800 p-4 rounded-2xl text-sm">
+                Bluetooth access is required to find and print directly to your NIIMBOT B1 Pro.
+                <button
+                  onClick={requestPermissions}
+                  disabled={isBusy}
+                  className="mt-3 w-full bg-indigo-600 text-white font-semibold py-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  Grant Bluetooth access
+                </button>
+              </div>
+            )}
+
+            {selectedPrinter && (
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-900 dark:text-emerald-100 border border-emerald-100 dark:border-emerald-800 p-4 rounded-2xl text-sm">
+                <p className="font-semibold">Selected NIIMBOT B1 Pro</p>
+                <p>{selectedPrinter.displayName}</p>
+                <p>Model id {selectedPrinter.modelId} · {selectedPrinter.profile.labelName} · {selectedPrinter.reconnectId}</p>
+                <div className="grid grid-cols-3 gap-2 mt-3">
+                  <button onClick={reconnectSelectedPrinter} disabled={isBusy} className="bg-white/80 dark:bg-gray-900/80 py-2 rounded-lg font-semibold disabled:opacity-50">Reconnect</button>
+                  <button onClick={scanForPrinters} disabled={isBusy} className="bg-white/80 dark:bg-gray-900/80 py-2 rounded-lg font-semibold disabled:opacity-50">Change</button>
+                  <button onClick={forgetPrinter} disabled={isBusy} className="bg-white/80 dark:bg-gray-900/80 py-2 rounded-lg font-semibold text-red-600 disabled:opacity-50">Forget</button>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={scanForPrinters}
+              disabled={isBusy || !isNiimbotPermissionGranted(permissions)}
+              className="w-full bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 font-bold py-3 px-4 rounded-xl hover:opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw size={18} /> {selectedPrinter ? 'Rescan / change B1 Pro' : 'Scan for NIIMBOT B1 Pro'}
+            </button>
+
+            {candidates.length > 0 && (
+              <div className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-2">
+                <h3 className="font-semibold text-gray-900 dark:text-white">Nearby B1 Pro candidates</h3>
+                {candidates.map(device => (
+                  <button
+                    key={device.deviceId}
+                    onClick={() => connectAndIdentify(device)}
+                    disabled={isBusy}
+                    className="w-full text-left p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-indigo-400 disabled:opacity-50"
+                  >
+                    <p className="font-semibold text-gray-900 dark:text-white">{device.name || 'NIIMBOT candidate'}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{device.address || device.deviceId}{typeof device.rssi === 'number' ? ` · RSSI ${device.rssi}` : ''}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {visibleError && (
+              <div className={`p-4 rounded-2xl text-sm border ${visibleError.unconfirmedPrint ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-red-50 text-red-800 border-red-100'}`}>
+                <p className="font-bold">{visibleError.title}</p>
+                <p className="mt-1">{visibleError.action}</p>
+                <p className="mt-1 text-xs opacity-80">{error?.message}</p>
+                {visibleError.recoverable && selectedPrinter && (
+                  <button
+                    onClick={lastLabelSnapshot ? retrySameLabel : printCurrentLabel}
+                    disabled={isBusy}
+                    className="mt-3 w-full bg-indigo-600 text-white font-semibold py-2 rounded-xl disabled:opacity-50"
+                  >
+                    Retry same label
+                  </button>
+                )}
+              </div>
+            )}
+
+            {step === 'success' && (
+              <div className="bg-emerald-50 text-emerald-800 border border-emerald-100 p-4 rounded-2xl text-sm font-semibold">
+                Print confirmed by the NIIMBOT B1 Pro.
+              </div>
+            )}
+
+            <button
+              onClick={printCurrentLabel}
+              disabled={!canPrint}
+              className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Printer size={20} /> {selectedPrinter ? 'Print current label to NIIMBOT B1 Pro' : 'Set up NIIMBOT B1 Pro before printing'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div
