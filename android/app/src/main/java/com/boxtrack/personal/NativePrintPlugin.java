@@ -269,6 +269,7 @@ public class NativePrintPlugin extends Plugin {
                     if (!requireResponse(session, labelTypeResponse, "SetLabelType")) return;
                     sendWait(NiimbotV4Protocol.COMMAND_PRINT_START, NiimbotV4Protocol.printStartPayload(copies, 1), NiimbotV4Protocol.RESPONSE_PRINT_START, COMMAND_TIMEOUT_MS, startResponse -> {
                         if (!requireResponse(session, startResponse, "PrintStart")) return;
+                        session.transferStarted = true;
                         sendPrintStatusProbeThenPage(session, packedRaster, printTimeoutMs);
                     });
                 });
@@ -371,7 +372,13 @@ public class NativePrintPlugin extends Plugin {
         if (session == null || session.resolved) return;
         session.resolved = true;
         if (activePrintSession == session) activePrintSession = null;
-        resolveError(session.call, code, message, NIIMBOT_B1_PRO_MODEL_ID, session.deviceId, recoverable);
+        String resolvedCode = code;
+        String resolvedMessage = message;
+        if (session.transferStarted && !"unconfirmed-print".equals(code)) {
+            resolvedCode = "unconfirmed-print";
+            resolvedMessage = message + " The label transfer had already started. Inspect the physical label before retrying.";
+        }
+        resolveError(session.call, resolvedCode, resolvedMessage, NIIMBOT_B1_PRO_MODEL_ID, session.deviceId, recoverable);
     }
 
     private void resolvePrint(PrintSession session, JSObject value) {
@@ -791,6 +798,7 @@ public class NativePrintPlugin extends Plugin {
         final String deviceId;
         final int copies;
         boolean resolved;
+        boolean transferStarted;
         long deadlineAtMs;
         String stage;
 

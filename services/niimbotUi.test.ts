@@ -53,6 +53,9 @@ describe('Niimbot B1 Pro print UI helpers', () => {
     expect(getNiimbotErrorPresentation({ code: 'unconfirmed-print', message: 'Timed out' }).action).toMatch(
       /inspect the physical label before retrying/i,
     );
+    expect(getNiimbotErrorPresentation({ code: 'transmission-failed', message: 'Write failed' }).action).toMatch(
+      /inspect the physical label before retrying/i,
+    );
   });
 
   it('requires scan and connect permissions to be granted before setup can proceed', () => {

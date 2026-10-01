@@ -88,7 +88,7 @@ const ERROR_PRESENTATIONS: Record<NiimbotBridgeErrorCode, Omit<NiimbotErrorPrese
   },
   'transmission-failed': {
     title: 'Could not send the label',
-    action: 'Keep the phone close to the NIIMBOT B1 Pro and retry the same label.',
+    action: 'Keep the phone close to the NIIMBOT B1 Pro and retry the same label. If transfer had already started, inspect the physical label before retrying.',
   },
   'printer-status': {
     title: 'Printer needs attention',
