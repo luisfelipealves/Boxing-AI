@@ -12,6 +12,15 @@ import java.util.List;
 
 public class NiimbotV4ProtocolTest {
     @Test
+    public void bleChannelPreparationGateAllowsOnlyOneTerminalOutcome() {
+        NativePrintPlugin.BleChannelPreparationGate gate = new NativePrintPlugin.BleChannelPreparationGate();
+
+        assertTrue(gate.tryFinish());
+        assertTrue(gate.isFinished());
+        assertTrue(!gate.tryFinish());
+    }
+
+    @Test
     public void fixedB1ProSelectionMetadataDoesNotRequireReportedModelId() throws Exception {
         JSONObject selected = NativePrintPlugin.fixedB1ProSelectedPrinterObject(
                 "AA:BB:CC:DD:EE:FF",
