@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @CapacitorPlugin(
         name = "NiimbotBlePrinter",
@@ -83,7 +84,7 @@ public class NativePrintPlugin extends Plugin {
     private BluetoothGattCharacteristic currentCharacteristic;
     private String currentDeviceId;
     private PrintSession activePrintSession;
-    private Runnable pendingAfterNotificationsEnabled;
+    private PendingNotificationSetup pendingNotificationSetup;
 
     @PluginMethod
     public void checkPermissions(PluginCall call) {
@@ -501,19 +502,26 @@ public class NativePrintPlugin extends Plugin {
 
         closeCurrentGatt();
         long timeoutMs = Math.max(1_000L, call.getLong("timeoutMs", DEFAULT_CONNECT_TIMEOUT_MS));
+        BleChannelPreparationGate preparationGate = new BleChannelPreparationGate();
         Runnable timeout = () -> {
+            if (!preparationGate.tryFinish()) return;
             closeCurrentGatt();
-            resolveError(call, "connection-failed", "Timed out connecting to the selected NIIMBOT printer.", null, deviceId, true);
+            resolveError(call, "connection-failed", "Timed out preparing the NIIMBOT B1 Pro BLE channel.", null, deviceId, true);
         };
         mainHandler.postDelayed(timeout, timeoutMs);
+
+        Runnable failConnection = () -> {
+            if (!preparationGate.tryFinish()) return;
+            mainHandler.removeCallbacks(timeout);
+            resolveError(call, "connection-failed", "Unable to connect to the selected NIIMBOT printer.", null, deviceId, true);
+        };
 
         BluetoothGattCallback callback = new BluetoothGattCallback() {
             @Override
             public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
                 if (status != BluetoothGatt.GATT_SUCCESS) {
-                    mainHandler.removeCallbacks(timeout);
                     closeGatt(gatt);
-                    resolveError(call, "connection-failed", "Unable to connect to the selected NIIMBOT printer.", null, deviceId, true);
+                    failConnection.run();
                     return;
                 }
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
@@ -523,6 +531,13 @@ public class NativePrintPlugin extends Plugin {
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     PrintSession session = activePrintSession;
                     closeGatt(gatt);
+                    if (!preparationGate.isFinished()) {
+                        if (preparationGate.tryFinish()) {
+                            mainHandler.removeCallbacks(timeout);
+                            resolveError(call, "connection-failed", "The NIIMBOT B1 Pro disconnected while preparing the BLE channel.", null, deviceId, true);
+                        }
+                        return;
+                    }
                     if (session != null && !session.resolved) {
                         failPrint(session, "disconnect", "The NIIMBOT B1 Pro disconnected during printing. Inspect the physical label before retrying.", true);
                     }
@@ -531,25 +546,35 @@ public class NativePrintPlugin extends Plugin {
 
             @Override
             public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-                mainHandler.removeCallbacks(timeout);
                 if (status != BluetoothGatt.GATT_SUCCESS) {
-                    resolveError(call, "connection-failed", "Unable to discover BLE services on the selected printer.", null, deviceId, true);
+                    if (preparationGate.tryFinish()) {
+                        mainHandler.removeCallbacks(timeout);
+                        resolveError(call, "connection-failed", "Unable to discover BLE services on the selected printer.", null, deviceId, true);
+                    }
                     return;
                 }
                 BluetoothGattService service = gatt.getService(NIIMBOT_SERVICE_UUID);
                 if (service == null) {
-                    resolveError(call, "missing-gatt-service", "The selected device does not expose the NIIMBOT BLE service.", null, deviceId, false);
+                    if (preparationGate.tryFinish()) {
+                        mainHandler.removeCallbacks(timeout);
+                        resolveError(call, "missing-gatt-service", "The selected device does not expose the NIIMBOT BLE service.", null, deviceId, false);
+                    }
                     return;
                 }
                 BluetoothGattCharacteristic characteristic = service.getCharacteristic(NIIMBOT_CHARACTERISTIC_UUID);
                 if (characteristic == null) {
-                    resolveError(call, "missing-gatt-characteristic", "The selected device does not expose the NIIMBOT BLE characteristic.", null, deviceId, false);
+                    if (preparationGate.tryFinish()) {
+                        mainHandler.removeCallbacks(timeout);
+                        resolveError(call, "missing-gatt-characteristic", "The selected device does not expose the NIIMBOT BLE characteristic.", null, deviceId, false);
+                    }
                     return;
                 }
 
                 currentGatt = gatt;
                 currentCharacteristic = characteristic;
                 Runnable afterNotificationsEnabled = () -> {
+                    if (!preparationGate.tryFinish()) return;
+                    mainHandler.removeCallbacks(timeout);
                     if (!identify) {
                         call.resolve(ok(deviceObject(device, null, null)));
                         return;
@@ -566,14 +591,17 @@ public class NativePrintPlugin extends Plugin {
             @Override
             public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
                 if (!CLIENT_CHARACTERISTIC_CONFIG_UUID.equals(descriptor.getUuid())) return;
-                Runnable pending = pendingAfterNotificationsEnabled;
-                pendingAfterNotificationsEnabled = null;
-                if (pending == null) return;
+                PendingNotificationSetup pending = pendingNotificationSetup;
+                pendingNotificationSetup = null;
+                if (pending == null || pending.gatt != gatt) return;
                 if (status != BluetoothGatt.GATT_SUCCESS) {
-                    resolveError(call, "connection-failed", "Unable to enable BLE notifications on the selected printer.", null, deviceId, true);
+                    if (preparationGate.tryFinish()) {
+                        mainHandler.removeCallbacks(timeout);
+                        resolveError(call, "connection-failed", "Unable to enable BLE notifications on the selected printer.", null, deviceId, true);
+                    }
                     return;
                 }
-                pending.run();
+                pending.afterEnabled.run();
             }
 
             @Override
@@ -604,11 +632,11 @@ public class NativePrintPlugin extends Plugin {
         BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIG_UUID);
         if (descriptor != null) {
             descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-            pendingAfterNotificationsEnabled = afterEnabled;
+            pendingNotificationSetup = new PendingNotificationSetup(gatt, afterEnabled);
             if (gatt.writeDescriptor(descriptor)) {
                 return true;
             }
-            pendingAfterNotificationsEnabled = null;
+            pendingNotificationSetup = null;
         }
         return false;
     }
@@ -777,7 +805,7 @@ public class NativePrintPlugin extends Plugin {
         currentGatt = null;
         currentCharacteristic = null;
         currentDeviceId = null;
-        pendingAfterNotificationsEnabled = null;
+        pendingNotificationSetup = null;
         responseWaiters.clear();
     }
 
@@ -826,6 +854,28 @@ public class NativePrintPlugin extends Plugin {
 
     private interface IdentifySuccess {
         void onIdentified(JSObject identifiedPrinter);
+    }
+
+    static class BleChannelPreparationGate {
+        private final AtomicBoolean finished = new AtomicBoolean(false);
+
+        boolean tryFinish() {
+            return finished.compareAndSet(false, true);
+        }
+
+        boolean isFinished() {
+            return finished.get();
+        }
+    }
+
+    private static class PendingNotificationSetup {
+        final BluetoothGatt gatt;
+        final Runnable afterEnabled;
+
+        PendingNotificationSetup(BluetoothGatt gatt, Runnable afterEnabled) {
+            this.gatt = gatt;
+            this.afterEnabled = afterEnabled;
+        }
     }
 
     private static class ResponseWaiter {
