@@ -1,5 +1,5 @@
 ID: DEV-002
-Status: HUMAN_TESTING
+Status: MERGED
 Product decision: PD-002
 Branch: agent/dev-002-storage-integrity-validation
 Created: 2026-09-30
@@ -58,4 +58,5 @@ Human testing:
 - Human testing accepted by Felipe on 2026-10-01: "dev team human tests OK. approved".
 
 Merge status:
-- Human testing approved; not merged into main in this worktree.
+- Human testing approved and merged into `main`.
+- Released as `v0.0.15` on 2026-10-01.
