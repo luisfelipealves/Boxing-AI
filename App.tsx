@@ -47,6 +47,7 @@ import { Location, Category, Box, Item } from './types';
 import * as storage from './services/storageService';
 import { analyzeItemImage, analyzeItemAudio, createInventoryChat } from './services/geminiService';
 import { getGeminiApiKey, setStoredGeminiApiKey } from './services/geminiKeyService';
+import { LABEL_PRINT_CONFIG, buildBoxQrValue } from './services/labelPrintConfig';
 
 interface NativePrintPlugin {
   print(): Promise<void>;
@@ -1448,13 +1449,21 @@ const BoxLabelPage = () => {
     });
   }, [id]);
 
-  if (!box) return <PageLoader />;
+  if (!id || !box) return <PageLoader />;
 
   // URL format: Current Origin + /#/box/ID
-  const qrValue = `${window.location.origin}${window.location.pathname}#/box/${id}`;
+  const qrValue = buildBoxQrValue(window.location.origin, window.location.pathname, id);
+  const labelStyle: React.CSSProperties = {
+    width: LABEL_PRINT_CONFIG.cssWidth,
+    height: LABEL_PRINT_CONFIG.cssHeight,
+  };
+  const qrStyle: React.CSSProperties = {
+    width: `${LABEL_PRINT_CONFIG.qrSizeMm}mm`,
+    height: `${LABEL_PRINT_CONFIG.qrSizeMm}mm`,
+  };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white print:min-h-0 print:w-[50mm] print:h-[30mm] print:overflow-hidden">
       <div className="print:hidden p-4">
         <button
           onClick={() => navigate(-1)}
@@ -1463,37 +1472,41 @@ const BoxLabelPage = () => {
           <ChevronLeft size={20} /> Back
         </button>
         <div className="bg-blue-50 p-4 rounded-xl text-blue-800 text-sm mb-4 border border-blue-100">
-          ℹ️ Connect to a printer and tap the button below. This view is optimized for label printers.
+          ℹ️ Connect your Niimbot B1 Pro and print on a fixed 50 × 30 mm label.
         </div>
         <button
           onClick={printLabel}
           className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
         >
-          <Printer size={20} /> Print Label
+          <Printer size={20} /> Print 50 × 30 mm Niimbot Label
         </button>
       </div>
 
-      <div className="flex flex-col items-center justify-center p-8 border-4 border-black m-4 rounded-3xl print:border-4 print:m-0 print:p-4 print:h-screen print:flex print:items-center print:justify-center">
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl font-black text-black uppercase tracking-tighter leading-none mb-4">
-            {box.name}
-          </h1>
+      <div
+        className="box-label flex items-center gap-[2mm] overflow-hidden bg-white text-black border-2 border-black rounded-[2mm] m-4 p-[2mm] print:m-0 print:box-border print:border-2"
+        style={labelStyle}
+        aria-label="Niimbot B1 Pro 50 × 30 mm box label"
+      >
+        <div className="box-label__qr flex-shrink-0 bg-white p-[0.75mm] border border-black">
+          <QRCode
+            value={qrValue}
+            size={128}
+            level="H"
+            style={qrStyle}
+          />
+        </div>
 
-          <div className="bg-white p-2 inline-block">
-            <QRCode
-              value={qrValue}
-              size={256}
-              level="H"
-            />
+        <div className="min-w-0 flex-1 self-stretch flex flex-col justify-between py-[0.5mm]">
+          <div className="min-w-0">
+            <p className="text-[5.2mm] font-black leading-none uppercase tracking-[-0.2mm] truncate">
+              {box.name}
+            </p>
+            <div className="mt-[1mm]">
+              <p className="text-[2mm] font-mono text-gray-600 uppercase tracking-[0.25mm] leading-none">Box number</p>
+              <p className="font-mono font-black text-[5mm] leading-none">{box.boxNumber ?? '—'}</p>
+            </div>
           </div>
-
-          <div className="text-center mt-4 space-y-1">
-            <p className="text-sm font-mono text-gray-500 uppercase tracking-widest">BOX NUMBER</p>
-            <p className="font-mono font-bold text-xl">{box.boxNumber ?? '—'}</p>
-          </div>
-          <div className="mt-8 pt-4 border-t-2 border-gray-100 w-full">
-            <p className="text-gray-400 font-bold tracking-widest uppercase text-xs">Property of BoxTrack</p>
-          </div>
+          <p className="text-[1.8mm] text-gray-500 font-bold tracking-[0.2mm] uppercase leading-none">BoxTrack</p>
         </div>
       </div>
 
@@ -1501,10 +1514,25 @@ const BoxLabelPage = () => {
                 @media print {
                     @page {
                         margin: 0;
-                        size: auto;
+                        size: ${LABEL_PRINT_CONFIG.cssPageSize};
                     }
-                    body {
+                    html,
+                    body,
+                    #root {
+                        width: ${LABEL_PRINT_CONFIG.cssWidth};
+                        height: ${LABEL_PRINT_CONFIG.cssHeight};
+                        margin: 0;
+                        padding: 0;
+                        overflow: hidden;
                         background: white;
+                    }
+                    * {
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    .box-label {
+                        width: ${LABEL_PRINT_CONFIG.cssWidth} !important;
+                        height: ${LABEL_PRINT_CONFIG.cssHeight} !important;
                     }
                 }
             `}</style>

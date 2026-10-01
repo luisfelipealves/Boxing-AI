@@ -16,6 +16,17 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "NativePrint")
 public class NativePrintPlugin extends Plugin {
     private static final String TAG = "NativePrint";
+    private static final String LABEL_MEDIA_SIZE_ID = "NIIMBOT_B1_PRO_50X30";
+    private static final String LABEL_MEDIA_SIZE_LABEL = "Niimbot B1 Pro 50 x 30 mm";
+    private static final int LABEL_WIDTH_MILS = 1969;
+    private static final int LABEL_HEIGHT_MILS = 1181;
+    private static final PrintAttributes.MediaSize NIIMBOT_B1_PRO_50X30 =
+            new PrintAttributes.MediaSize(
+                    LABEL_MEDIA_SIZE_ID,
+                    LABEL_MEDIA_SIZE_LABEL,
+                    LABEL_WIDTH_MILS,
+                    LABEL_HEIGHT_MILS
+            );
 
     @PluginMethod
     public void print(PluginCall call) {
@@ -50,7 +61,7 @@ public class NativePrintPlugin extends Plugin {
                             "BoxTrack label",
                             adapter,
                             new PrintAttributes.Builder()
-                                    .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                                    .setMediaSize(NIIMBOT_B1_PRO_50X30)
                                     .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
                                     .build()
                     );
