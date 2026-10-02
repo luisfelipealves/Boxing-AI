@@ -35,4 +35,10 @@ describe('NIIMBOT BLE App flow source guards', () => {
     expect(printBody).toContain('buildNiimbotPrintRequest(selectedPrinter.reconnectId, snapshot)');
     expect(printBody.match(/NiimbotBlePrinter\.printLabel\(/g) ?? []).toHaveLength(1);
   });
+
+  it('does not keep the prepare step visually active after identify is no longer busy', () => {
+    expect(appSource).toContain('const activeStep = isBusy ? step : null;');
+    expect(appSource).toContain('${activeStep === stepId ?');
+    expect(appSource).toContain('{activeStep === stepId ? <Loader2');
+  });
 });

@@ -1482,6 +1482,7 @@ const BoxLabelPage = () => {
   const profile = B1_PRO_50X30_PROFILE;
   const canPrint = isAndroid && isPluginAvailable && isNiimbotPermissionGranted(permissions) && Boolean(selectedPrinter) && !isBusy;
   const visibleError = error ? getNiimbotErrorPresentation(error) : null;
+  const activeStep = isBusy ? step : null;
 
   const setBridgeError = (bridgeError: NiimbotBridgeError) => {
     setError(bridgeError);
@@ -1709,8 +1710,8 @@ const BoxLabelPage = () => {
                   ['sending', 'Send over BLE'],
                   ['printing/confirming', 'Confirm print result'],
                 ].map(([stepId, label]) => (
-                  <li key={stepId} className={`flex items-center gap-2 ${step === stepId ? 'text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {step === stepId ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
+                  <li key={stepId} className={`flex items-center gap-2 ${activeStep === stepId ? 'text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {activeStep === stepId ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
                     {label}
                   </li>
                 ))}
