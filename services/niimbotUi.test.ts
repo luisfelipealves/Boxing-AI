@@ -12,7 +12,6 @@ describe('Niimbot B1 Pro print UI helpers', () => {
     expect(NIIMBOT_PRINT_PROGRESS_STEPS).toEqual([
       'permission/setup',
       'scanning',
-      'connecting',
       'identifying',
       'rendering',
       'sending',

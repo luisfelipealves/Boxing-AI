@@ -9,7 +9,6 @@ import {
 export const NIIMBOT_PRINT_PROGRESS_STEPS = [
   'permission/setup',
   'scanning',
-  'connecting',
   'identifying',
   'rendering',
   'sending',

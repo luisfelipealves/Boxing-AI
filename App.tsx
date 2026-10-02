@@ -1525,17 +1525,11 @@ const BoxLabelPage = () => {
     }
   };
 
-  const connectAndIdentify = async (device: NiimbotBridgeDevice) => {
+  const identifySelectedPrinter = async (device: NiimbotBridgeDevice) => {
     setIsBusy(true);
     setError(null);
-    setStep('connecting');
+    setStep('identifying');
     try {
-      const connectionResult = await NiimbotBlePrinter.connect({ deviceId: device.deviceId, timeoutMs: 10_000 });
-      if (!connectionResult.ok) {
-        setBridgeError(connectionResult.error);
-        return;
-      }
-      setStep('identifying');
       const identifyResult = await NiimbotBlePrinter.identify({ deviceId: device.deviceId, timeoutMs: 10_000 });
       if (!identifyResult.ok) {
         setBridgeError(identifyResult.error);
@@ -1549,7 +1543,7 @@ const BoxLabelPage = () => {
 
   const reconnectSelectedPrinter = async () => {
     if (!selectedPrinter) return;
-    await connectAndIdentify({
+    await identifySelectedPrinter({
       deviceId: selectedPrinter.reconnectId,
       name: selectedPrinter.displayName,
       address: selectedPrinter.address,
@@ -1582,13 +1576,6 @@ const BoxLabelPage = () => {
     setIsBusy(true);
     setError(null);
     try {
-      setStep('identifying');
-      const identifyResult = await NiimbotBlePrinter.identify({ deviceId: selectedPrinter.reconnectId, timeoutMs: 10_000 });
-      if (!identifyResult.ok) {
-        setBridgeError(identifyResult.error);
-        return;
-      }
-      setSelectedPrinter(identifyResult.value);
       setStep('rendering');
       let labelRaster: ReturnType<typeof renderBoxLabelRaster>;
       try {
@@ -1614,7 +1601,7 @@ const BoxLabelPage = () => {
         return;
       }
       const request = {
-        ...buildNiimbotPrintRequest(identifyResult.value.reconnectId, snapshot),
+        ...buildNiimbotPrintRequest(selectedPrinter.reconnectId, snapshot),
         rasterBase64: labelRaster.rasterBase64,
       };
       setStep('sending');
@@ -1717,8 +1704,7 @@ const BoxLabelPage = () => {
                 {[
                   ['permission/setup', 'Grant Bluetooth access'],
                   ['scanning', 'Scan for NIIMBOT B1 Pro'],
-                  ['connecting', 'Connect to selected printer'],
-                  ['identifying', 'Find B1 Pro print service'],
+                  ['identifying', 'Prepare selected B1 Pro'],
                   ['rendering', 'Render 50 × 30 mm label'],
                   ['sending', 'Send over BLE'],
                   ['printing/confirming', 'Confirm print result'],
@@ -1771,7 +1757,7 @@ const BoxLabelPage = () => {
                 {candidates.map(device => (
                   <button
                     key={device.deviceId}
-                    onClick={() => connectAndIdentify(device)}
+                    onClick={() => identifySelectedPrinter(device)}
                     disabled={isBusy}
                     className="w-full text-left p-3 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-indigo-400 disabled:opacity-50"
                   >
