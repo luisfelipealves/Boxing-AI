@@ -2,7 +2,7 @@
 id: DEV-016
 type: development
 title: Avoid repeated BLE reconnects during B1 Pro setup and print
-status: HUMAN_TESTING
+status: MERGED
 source:
   - PD-010
   - Human feedback after v0.0.22: "agora fica preso em Find B1 Pro print service"
@@ -13,7 +13,7 @@ assigned_agent: Developer-01
 branch: agent/dev-016-single-connect-print-flow
 worktree: /home/felipe/projetos/Boxing-AI/worktrees/dev-016-single-connect-print-flow
 started_at: 2026-10-01T20:35:00Z
-updated_at: 2026-10-02T06:36:17Z
+updated_at: 2026-10-02T07:10:21Z
 completed_at: 2026-10-01T20:48:00Z
 ---
 
@@ -80,7 +80,7 @@ DEV-015 must be present because this task builds on fixed B1 Pro service/charact
 
 # Human Testing
 
-Status: ready for human testing.
+Status: approved by human and merged for release.
 
 Manual validation steps:
 
@@ -105,3 +105,8 @@ Automated validation:
 Known limitation:
 
 - Android Gradle validation remains unavailable in this environment because Android SDK location is not configured.
+
+# Merge
+
+- Human approval: explicit instruction “aprovado. siga pra merge release”.
+- Merged to `main` for release `v0.0.24`.
