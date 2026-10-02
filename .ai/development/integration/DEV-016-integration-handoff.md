@@ -40,3 +40,20 @@ No merge conflicts occurred.
 
 - Android Gradle validation still requires a configured Android SDK.
 - Manual hardware validation remains required to prove the B1 Pro no longer gets stuck during setup/print.
+
+# Follow-up Root Cause Fix — 2026-10-02T04:00:30Z
+
+Human feedback after DEV-016 reported the flow still appeared stuck on “Prepare selected B1 Pro”. Investigation traced this to retained UI progress state after successful identify: `identifySelectedPrinter` completed and set `isBusy` false, but the setup list still treated `step === 'identifying'` as active and kept rendering an animated spinner.
+
+Fix applied on this integration branch:
+
+- Added an `activeStep` derived from `isBusy ? step : null` in `App.tsx`.
+- The setup checklist now highlights/spins a step only while an operation is actually busy.
+- Added a source regression guard in `services/niimbotBleFlowSource.test.ts` so “Prepare selected B1 Pro” cannot remain visually active after identify is no longer busy.
+
+Validation:
+
+- `npm test -- --run services/niimbotBleFlowSource.test.ts` — passed, 1 file / 3 tests.
+- `npm run test` — passed, 7 test files / 35 tests.
+- `npm run build` — passed. Existing warnings: bundle chunk over 500 kB and Browserslist data age.
+- `git diff --check` — passed.
