@@ -42,3 +42,40 @@ None.
 1. Select/reconnect the B1 Pro and confirm setup does not get stuck in an extra service-finding cycle.
 2. Press print and confirm it proceeds directly to render/send without a separate pre-print identify step.
 3. Verify physical label output or inspect label if the app reports `unconfirmed-print`.
+
+# Follow-up Review — 2026-10-02T04:01:59Z
+
+Reviewed follow-up commit `8166e62` on `agent/integration-dev-016-single-connect-print-flow` after human feedback that the flow still appeared stuck on “Prepare selected B1 Pro”.
+
+## Verdict
+
+Pass. No blocking or non-blocking findings.
+
+## Scope Reviewed
+
+- `App.tsx`
+- `services/niimbotBleFlowSource.test.ts`
+- `.ai/development/integration/DEV-016-integration-handoff.md`
+
+## Findings
+
+### Blocking
+
+None.
+
+### Non-blocking
+
+None.
+
+## Review Notes
+
+- The fix is scoped to UI progress semantics and does not add another BLE/native workaround.
+- `activeStep = isBusy ? step : null` prevents stale `step === 'identifying'` state from keeping the “Prepare selected B1 Pro” row highlighted/spinning after identify has completed.
+- The source guard test now covers the visual stuck regression.
+
+## Validation
+
+- `npm test -- --run services/niimbotBleFlowSource.test.ts` — passed, 3 tests.
+- `npm run test` — passed, 7 files / 35 tests.
+- `npm run build` — passed, with existing Vite chunk-size and Browserslist-age warnings.
+- `git show --check --format=short 8166e62` — passed.
