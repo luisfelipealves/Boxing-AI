@@ -2,7 +2,7 @@
 id: DEV-016
 type: development
 title: Avoid repeated BLE reconnects during B1 Pro setup and print
-status: IMPLEMENTED
+status: HUMAN_TESTING
 source:
   - PD-010
   - Human feedback after v0.0.22: "agora fica preso em Find B1 Pro print service"
@@ -13,7 +13,7 @@ assigned_agent: Developer-01
 branch: agent/dev-016-single-connect-print-flow
 worktree: /home/felipe/projetos/Boxing-AI/worktrees/dev-016-single-connect-print-flow
 started_at: 2026-10-01T20:35:00Z
-updated_at: 2026-10-01T20:48:00Z
+updated_at: 2026-10-02T06:36:17Z
 completed_at: 2026-10-01T20:48:00Z
 ---
 
@@ -64,3 +64,44 @@ Current `App.tsx` calls `NiimbotBlePrinter.connect(...)` and then `NiimbotBlePri
 # Dependencies
 
 DEV-015 must be present because this task builds on fixed B1 Pro service/characteristic discovery as the setup contract.
+
+# Integration
+
+- Integration branch: `agent/integration-dev-016-single-connect-print-flow`
+- Integration handoff: `.ai/development/integration/DEV-016-integration-handoff.md`
+- Review: `.ai/development/reviews/DEV-016-review.md`
+
+# Commits
+
+- `9d2da1e454f8aef2850a427a030ae9a5ef9f7c0a` — avoid redundant Niimbot BLE reconnects.
+- `61b5510` — record DEV-016 implementation handoff.
+- `8166e62` — clear stale “Prepare selected B1 Pro” spinner after identify completes.
+- `68ab3e0` — record independent review of the prepare-spinner follow-up.
+
+# Human Testing
+
+Status: ready for human testing.
+
+Manual validation steps:
+
+1. Install/run the app from `agent/integration-dev-016-single-connect-print-flow` on Android with the NIIMBOT B1 Pro nearby and powered on.
+2. Open a box label print screen.
+3. Grant Bluetooth permissions if prompted.
+4. Scan for the NIIMBOT B1 Pro.
+5. Select the B1 Pro candidate.
+6. Verify “Prepare selected B1 Pro” does not keep spinning after selection completes.
+7. Verify the selected printer card appears with B1 Pro identity/profile details.
+8. Tap “Print current label to NIIMBOT B1 Pro”.
+9. Verify the flow advances through render/send/confirm instead of performing a redundant pre-print identify step.
+10. Verify the physical 50 × 30 mm label prints with readable box number and scannable QR code, or inspect the label before retrying if the app reports `unconfirmed-print`.
+
+Automated validation:
+
+- `npm test -- --run services/niimbotBleFlowSource.test.ts` — passed, 1 file / 3 tests.
+- `npm run test` — passed, 7 test files / 35 tests.
+- `npm run build` — passed. Existing warnings: bundle chunk over 500 kB and Browserslist data age.
+- `git diff --check` / `git show --check` — passed.
+
+Known limitation:
+
+- Android Gradle validation remains unavailable in this environment because Android SDK location is not configured.
