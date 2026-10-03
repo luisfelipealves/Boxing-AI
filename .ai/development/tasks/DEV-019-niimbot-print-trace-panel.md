@@ -2,7 +2,7 @@
 id: DEV-019
 type: development
 title: Add NIIMBOT print trace panel and fix setup checklist state colors
-status: IMPLEMENTED
+status: HUMAN_TESTING
 source:
   - PD-010
   - Human feedback: "crie um painel de trace do processo de impressao na niimbot. logue ai tudo o que for feito para saber se falta algo. tambem acerte os checkmarks pois nao estao mudando de cor. Label rendering is not ready ... Buffer is not defined"
@@ -13,7 +13,7 @@ assigned_agent: Hermes
 branch: agent/dev-019-niimbot-print-trace
 worktree: /home/felipe/projetos/Boxing-AI/worktrees/dev-019-niimbot-print-trace
 started_at: 2026-10-03T06:45:00Z
-updated_at: 2026-10-03T06:58:52Z
+updated_at: 2026-10-03T07:01:48Z
 completed_at: 2026-10-03T06:58:52Z
 ---
 
@@ -87,3 +87,28 @@ DEV-018 must be present because this trace panel is for the latest serialized BL
 Branch: `agent/dev-019-niimbot-print-trace`
 
 Worktree: `/home/felipe/projetos/Boxing-AI/worktrees/dev-019-niimbot-print-trace`
+
+# Integration
+
+- Integration branch: `agent/integration-dev-019-niimbot-print-trace`
+- Integration handoff: `.ai/development/integration/DEV-019-integration-handoff.md`
+- Review: `.ai/development/reviews/DEV-019-review.md`
+
+# Human Testing
+
+Status: ready for human testing.
+
+Manual validation steps:
+
+1. Install/run the app from `agent/integration-dev-019-niimbot-print-trace` on Android with the NIIMBOT plugin available.
+2. Open a box label print screen.
+3. Confirm the “NIIMBOT print trace” panel is visible.
+4. Grant Bluetooth permissions if prompted.
+5. Scan for the NIIMBOT B1 Pro and select it.
+6. Confirm permission, scan, and prepare events appear in the trace.
+7. Tap “Print current label to NIIMBOT B1 Pro”.
+8. Confirm render/send/confirmation events appear in the trace with raster metadata.
+9. If a failure occurs, confirm the failed checklist row turns red, later rows remain pending/gray, and the trace shows the exact error message.
+10. Specifically verify that `Buffer is not defined` no longer appears during label rendering; if any error remains, copy the trace panel text.
+
+Merge status: NOT MERGED — awaiting explicit human approval.
