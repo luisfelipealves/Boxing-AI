@@ -19,6 +19,47 @@ export const NIIMBOT_PRINT_PROGRESS_STEPS = [
 
 export type NiimbotPrintProgressStep = (typeof NIIMBOT_PRINT_PROGRESS_STEPS)[number];
 
+export type NiimbotChecklistState = 'active' | 'complete' | 'failed' | 'pending';
+
+export interface NiimbotChecklistStepStateOptions {
+  readonly stepId: NiimbotPrintProgressStep;
+  readonly currentStep: NiimbotPrintProgressStep;
+  readonly activeStep?: NiimbotPrintProgressStep | null;
+  readonly failedStep?: NiimbotPrintProgressStep | null;
+  readonly isBusy: boolean;
+  readonly hasStarted?: boolean;
+}
+
+const NIIMBOT_STEP_ORDER = new Map<NiimbotPrintProgressStep, number>(
+  NIIMBOT_PRINT_PROGRESS_STEPS.map((entry, index) => [entry, index]),
+);
+
+export const getNiimbotChecklistStepState = ({
+  stepId,
+  currentStep,
+  activeStep = null,
+  failedStep = null,
+  isBusy,
+  hasStarted = false,
+}: NiimbotChecklistStepStateOptions): NiimbotChecklistState => {
+  if (failedStep === stepId) return 'failed';
+  if (activeStep === stepId) return 'active';
+  if (!hasStarted) return 'pending';
+  if (currentStep === 'success') return 'complete';
+
+  const stepOrder = NIIMBOT_STEP_ORDER.get(stepId);
+  if (currentStep === 'failure') {
+    const failedOrder = failedStep ? NIIMBOT_STEP_ORDER.get(failedStep) : undefined;
+    if (typeof failedOrder === 'number' && typeof stepOrder === 'number' && stepOrder < failedOrder) return 'complete';
+    return 'pending';
+  }
+
+  const currentOrder = NIIMBOT_STEP_ORDER.get(currentStep);
+  if (typeof currentOrder === 'number' && typeof stepOrder === 'number' && stepOrder < currentOrder) return 'complete';
+  if (!isBusy && currentStep === stepId && !failedStep) return 'complete';
+  return 'pending';
+};
+
 export interface NiimbotLabelSnapshot {
   readonly qrValue: string;
   readonly boxId: string;

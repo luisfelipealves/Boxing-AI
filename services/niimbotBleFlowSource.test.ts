@@ -38,7 +38,31 @@ describe('NIIMBOT BLE App flow source guards', () => {
 
   it('does not keep the prepare step visually active after identify is no longer busy', () => {
     expect(appSource).toContain('const activeStep = isBusy ? step : null;');
-    expect(appSource).toContain('${activeStep === stepId ?');
-    expect(appSource).toContain('{activeStep === stepId ? <Loader2');
+    expect(appSource).toContain('activeStep,');
+    expect(appSource).toContain('renderStepIcon(stepState)');
+  });
+
+  it('renders a print trace panel and logs render failures with the thrown message', () => {
+    const printBody = getFunctionBody('printCurrentLabel');
+
+    expect(appSource).toContain('NIIMBOT print trace');
+    expect(appSource).toContain('const appendTrace = (message: string, detail?: string) =>');
+    expect(appSource).toContain('Print trace entries are shown newest last for hardware debugging.');
+    expect(printBody).toContain("setFlowStep('rendering', 'Render label raster started'");
+    expect(printBody).toContain("appendTrace('Render label raster failed'");
+    expect(printBody).toContain('renderError instanceof Error ? renderError.message');
+  });
+
+  it('uses completed, active, failed, and pending styles for B1 Pro checklist rows', () => {
+    expect(appSource).toContain('getNiimbotChecklistStepState({');
+    expect(appSource).toContain('hasStarted: flowStarted');
+    expect(appSource).toContain('const setBridgeError = (bridgeError: NiimbotBridgeError, failedAt: NiimbotPrintProgressStep = step) =>');
+    expect(appSource).toContain('setBridgeError(result.error, \'scanning\')');
+    expect(appSource).toContain("}, 'rendering');");
+    expect(appSource).toContain("case 'complete':");
+    expect(appSource).toContain("text-emerald-700");
+    expect(appSource).toContain("case 'failed':");
+    expect(appSource).toContain("text-red-700");
+    expect(appSource).toContain("case 'pending':");
   });
 });
