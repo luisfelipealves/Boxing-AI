@@ -78,6 +78,21 @@ public class NiimbotV4ProtocolTest {
     }
 
     @Test
+    public void initialPrintSetupSendsRawConnectPacketBeforeDensity() {
+        List<NiimbotV4Protocol.SetupPacket> setupPackets = NiimbotV4Protocol.initialPrintSetupPackets(1);
+
+        assertEquals("ble-write-initial-connect", setupPackets.get(0).stage);
+        assertArrayEquals(NiimbotV4Protocol.INITIAL_CONNECTION_PACKET, setupPackets.get(0).packet);
+        assertEquals("ble-write-set-density", setupPackets.get(1).stage);
+        assertArrayEquals(
+                NiimbotV4Protocol.pack(NiimbotV4Protocol.COMMAND_SET_DENSITY, new byte[] { 0x03 }),
+                setupPackets.get(1).packet
+        );
+        assertEquals("ble-write-set-label-type", setupPackets.get(2).stage);
+        assertEquals("ble-write-print-start", setupPackets.get(3).stage);
+    }
+
+    @Test
     public void buildRowCommandsRunLengthEncodesEmptyAndBitmapRows() {
         byte[] raster = new byte[] {
                 0x00, 0x00,

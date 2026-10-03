@@ -3,6 +3,10 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const appSource = readFileSync(resolve(process.cwd(), 'App.tsx'), 'utf8');
+const nativePrintSource = readFileSync(
+  resolve(process.cwd(), 'android/app/src/main/java/com/boxtrack/personal/NativePrintPlugin.java'),
+  'utf8',
+);
 
 const getFunctionBody = (functionName: string): string => {
   const start = appSource.indexOf(`const ${functionName} = async`);
@@ -64,5 +68,16 @@ describe('NIIMBOT BLE App flow source guards', () => {
     expect(appSource).toContain("case 'failed':");
     expect(appSource).toContain("text-red-700");
     expect(appSource).toContain("case 'pending':");
+  });
+
+  it('sends the NIIMBOT raw initial connection packet before print setup commands', () => {
+    const initialConnect = nativePrintSource.indexOf('NiimbotV4Protocol.INITIAL_CONNECTION_PACKET');
+    const setDensity = nativePrintSource.indexOf('NiimbotV4Protocol.COMMAND_SET_DENSITY');
+
+    expect(initialConnect).toBeGreaterThanOrEqual(0);
+    expect(setDensity).toBeGreaterThanOrEqual(0);
+    expect(initialConnect).toBeLessThan(setDensity);
+    expect(nativePrintSource).toContain('"ble-write-initial-connect"');
+    expect(nativePrintSource).toContain('INITIAL_CONNECTION_SETTLE_MS = 200L');
   });
 });

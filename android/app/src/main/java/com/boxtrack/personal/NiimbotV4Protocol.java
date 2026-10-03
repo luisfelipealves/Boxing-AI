@@ -89,6 +89,15 @@ final class NiimbotV4Protocol {
         };
     }
 
+    static List<SetupPacket> initialPrintSetupPackets(int pages) {
+        List<SetupPacket> packets = new ArrayList<>();
+        packets.add(new SetupPacket("ble-write-initial-connect", INITIAL_CONNECTION_PACKET));
+        packets.add(new SetupPacket("ble-write-set-density", pack(COMMAND_SET_DENSITY, new byte[] { 0x03 })));
+        packets.add(new SetupPacket("ble-write-set-label-type", pack(COMMAND_SET_LABEL_TYPE, new byte[] { 0x01 })));
+        packets.add(new SetupPacket("ble-write-print-start", pack(COMMAND_PRINT_START, printStartPayload(pages, 1))));
+        return packets;
+    }
+
     static byte[] setPageSizePayload(int heightPx, int widthPx) {
         int safeHeight = clampU16(heightPx, "heightPx");
         int safeWidth = clampU16(widthPx, "widthPx");
@@ -201,6 +210,16 @@ final class NiimbotV4Protocol {
         RowCommand(int command, byte[] data) {
             this.command = command;
             this.data = data;
+        }
+    }
+
+    static final class SetupPacket {
+        final String stage;
+        final byte[] packet;
+
+        SetupPacket(String stage, byte[] packet) {
+            this.stage = stage;
+            this.packet = Arrays.copyOf(packet, packet.length);
         }
     }
 
