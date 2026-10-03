@@ -74,6 +74,7 @@ public class NativePrintPlugin extends Plugin {
     private static final int B1_PRO_RASTER_HEIGHT_PX = 354;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final BleWriteQueue writeQueue = new BleWriteQueue(this::writeBlePacket, (runnable, delayMs) -> mainHandler.postDelayed(runnable, delayMs));
     private final Map<String, JSObject> discoveredDevices = new LinkedHashMap<>();
     private final Map<Integer, ResponseWaiter> responseWaiters = new HashMap<>();
 
@@ -259,17 +260,16 @@ public class NativePrintPlugin extends Plugin {
         activePrintSession = session;
         session.stage = "sending";
         try {
-            sendWait(NiimbotV4Protocol.COMMAND_SET_DENSITY, new byte[] { 0x03 }, NiimbotV4Protocol.RESPONSE_SET_DENSITY, COMMAND_TIMEOUT_MS, densityResponse -> {
+            sendWait(NiimbotV4Protocol.COMMAND_SET_DENSITY, new byte[] { 0x03 }, NiimbotV4Protocol.RESPONSE_SET_DENSITY, COMMAND_TIMEOUT_MS, "ble-write-set-density", densityResponse -> {
                 logUnconfirmedSetupResponse(densityResponse, "SetDensity");
-                sendWait(NiimbotV4Protocol.COMMAND_SET_LABEL_TYPE, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_SET_LABEL_TYPE, COMMAND_TIMEOUT_MS, labelTypeResponse -> {
+                sendWait(NiimbotV4Protocol.COMMAND_SET_LABEL_TYPE, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_SET_LABEL_TYPE, COMMAND_TIMEOUT_MS, "ble-write-set-label-type", labelTypeResponse -> {
                     logUnconfirmedSetupResponse(labelTypeResponse, "SetLabelType");
-                    sendWait(NiimbotV4Protocol.COMMAND_PRINT_START, NiimbotV4Protocol.printStartPayload(copies, 1), NiimbotV4Protocol.RESPONSE_PRINT_START, COMMAND_TIMEOUT_MS, startResponse -> {
+                    sendWait(NiimbotV4Protocol.COMMAND_PRINT_START, NiimbotV4Protocol.printStartPayload(copies, 1), NiimbotV4Protocol.RESPONSE_PRINT_START, COMMAND_TIMEOUT_MS, "ble-write-print-start", startResponse -> {
                         logUnconfirmedSetupResponse(startResponse, "PrintStart");
-                        session.transferStarted = true;
                         sendPrintStatusProbeThenPage(session, packedRaster, printTimeoutMs);
-                    });
-                });
-            });
+                    }, stage -> failPrint(session, "transmission-failed", "BLE write was not accepted by Android while starting the print job.", true, stage));
+                }, stage -> failPrint(session, "transmission-failed", "BLE write was not accepted by Android while setting the label type.", true, stage));
+            }, stage -> failPrint(session, "transmission-failed", "BLE write was not accepted by Android while setting print density.", true, stage));
         } catch (Exception exception) {
             failPrint(session, "transmission-failed", messageOrDefault(exception, "Unable to start NIIMBOT B1 Pro print transfer."), true);
         }
@@ -277,8 +277,15 @@ public class NativePrintPlugin extends Plugin {
 
     private void sendPrintStatusProbeThenPage(PrintSession session, byte[] packedRaster, long printTimeoutMs) {
         try {
-            writeRaw(NiimbotV4Protocol.pack(NiimbotV4Protocol.COMMAND_PRINT_STATUS, new byte[] { 0x01 }));
-            mainHandler.postDelayed(() -> sendPage(session, packedRaster, printTimeoutMs), 30L);
+            enqueueWrite(NiimbotV4Protocol.pack(NiimbotV4Protocol.COMMAND_PRINT_STATUS, new byte[] { 0x01 }), "ble-write-status-probe", new WriteCallback() {
+                @Override public void onAccepted() {
+                    mainHandler.postDelayed(() -> sendPage(session, packedRaster, printTimeoutMs), 30L);
+                }
+
+                @Override public void onRejected(String stage) {
+                    failPrint(session, "transmission-failed", "BLE write was not accepted by Android while probing print status.", true, stage);
+                }
+            });
         } catch (Exception exception) {
             failPrint(session, "transmission-failed", messageOrDefault(exception, "Unable to send NIIMBOT print-status probe."), true);
         }
@@ -286,24 +293,21 @@ public class NativePrintPlugin extends Plugin {
 
     private void sendPage(PrintSession session, byte[] packedRaster, long printTimeoutMs) {
         try {
-            sendWait(NiimbotV4Protocol.COMMAND_SET_PAGE_SIZE, NiimbotV4Protocol.setPageSizePayload(B1_PRO_RASTER_HEIGHT_PX, B1_PRO_RASTER_WIDTH_PX), NiimbotV4Protocol.RESPONSE_SET_PAGE_SIZE, COMMAND_TIMEOUT_MS, pageSizeResponse -> {
+            sendWait(NiimbotV4Protocol.COMMAND_SET_PAGE_SIZE, NiimbotV4Protocol.setPageSizePayload(B1_PRO_RASTER_HEIGHT_PX, B1_PRO_RASTER_WIDTH_PX), NiimbotV4Protocol.RESPONSE_SET_PAGE_SIZE, COMMAND_TIMEOUT_MS, "ble-write-set-page-size", pageSizeResponse -> {
                 logUnconfirmedSetupResponse(pageSizeResponse, "SetPageSize");
                 try {
                     List<NiimbotV4Protocol.RowCommand> rowCommands = NiimbotV4Protocol.buildRowCommands(packedRaster, B1_PRO_RASTER_WIDTH_PX, B1_PRO_RASTER_HEIGHT_PX);
-                    session.transferStarted = true;
-                    for (NiimbotV4Protocol.RowCommand rowCommand : rowCommands) {
-                        writeRaw(NiimbotV4Protocol.pack(rowCommand.command, rowCommand.data));
-                    }
-                    sendWait(NiimbotV4Protocol.COMMAND_PAGE_END, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_PAGE_END, PAGE_END_TIMEOUT_MS, pageEndResponse -> {
-                        if (!requireResponse(session, pageEndResponse, "PageEnd")) return;
-                        session.stage = "printing-confirming";
-                        session.deadlineAtMs = System.currentTimeMillis() + printTimeoutMs;
-                        pollPrintStatus(session);
-                    });
+                    sendRowsSequentially(session, rowCommands, 0, () -> sendWait(NiimbotV4Protocol.COMMAND_PAGE_END, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_PAGE_END, PAGE_END_TIMEOUT_MS, "ble-write-page-end", pageEndResponse -> {
+                            if (!requireResponse(session, pageEndResponse, "PageEnd")) return;
+                            session.stage = "printing-confirming";
+                            session.deadlineAtMs = System.currentTimeMillis() + printTimeoutMs;
+                            pollPrintStatus(session);
+                        }, stage -> failPrint(session, "transmission-failed", "BLE write was not accepted by Android while ending the label page.", true, stage))
+                    );
                 } catch (Exception exception) {
                     failPrint(session, "transmission-failed", messageOrDefault(exception, "Unable to transfer packed label rows to the NIIMBOT B1 Pro."), true);
                 }
-            });
+            }, stage -> failPrint(session, "transmission-failed", "BLE write was not accepted by Android while configuring the label page.", true, stage));
         } catch (Exception exception) {
             failPrint(session, "transmission-failed", messageOrDefault(exception, "Unable to send NIIMBOT page setup."), true);
         }
@@ -316,7 +320,7 @@ public class NativePrintPlugin extends Plugin {
             return;
         }
         try {
-            sendWait(NiimbotV4Protocol.COMMAND_PRINT_STATUS, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_PRINT_STATUS, COMMAND_TIMEOUT_MS, statusResponse -> {
+            sendWait(NiimbotV4Protocol.COMMAND_PRINT_STATUS, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_PRINT_STATUS, COMMAND_TIMEOUT_MS, "ble-write-print-status", statusResponse -> {
                 NiimbotV4Protocol.PrintStatus status = NiimbotV4Protocol.parsePrintStatus(toProtocolResponse(statusResponse));
                 String failure = NiimbotV4Protocol.mapPrinterStatusFailure(status, session.copies);
                 if (failure == null) {
@@ -328,7 +332,7 @@ public class NativePrintPlugin extends Plugin {
                     return;
                 }
                 mainHandler.postDelayed(() -> pollPrintStatus(session), PRINT_STATUS_POLL_MS);
-            });
+            }, stage -> failPrint(session, "printer-status", "BLE write was not accepted by Android while polling print status.", true, stage));
         } catch (Exception exception) {
             failPrint(session, "printer-status", messageOrDefault(exception, "Unable to read NIIMBOT print status."), true);
         }
@@ -336,7 +340,7 @@ public class NativePrintPlugin extends Plugin {
 
     private void finishPrint(PrintSession session) {
         try {
-            sendWait(NiimbotV4Protocol.COMMAND_PRINT_END, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_PRINT_END, COMMAND_TIMEOUT_MS, endResponse -> {
+            sendWait(NiimbotV4Protocol.COMMAND_PRINT_END, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_PRINT_END, COMMAND_TIMEOUT_MS, "ble-write-print-end", endResponse -> {
                 if (!requireResponse(session, endResponse, "PrintEnd")) return;
                 session.stage = "success";
                 JSObject value = new JSObject();
@@ -348,10 +352,30 @@ public class NativePrintPlugin extends Plugin {
                 value.put("confirmed", true);
                 value.put("copies", session.copies);
                 resolvePrint(session, value);
-            });
+            }, stage -> failPrint(session, "unconfirmed-print", "BLE write was not accepted by Android while ending the print job.", true, stage));
         } catch (Exception exception) {
             failPrint(session, "unconfirmed-print", messageOrDefault(exception, "The label printed, but final NIIMBOT PrintEnd confirmation failed. Inspect the physical label before retrying."), true);
         }
+    }
+
+    private void sendRowsSequentially(PrintSession session, List<NiimbotV4Protocol.RowCommand> rowCommands, int index, Runnable onComplete) {
+        if (session.resolved) return;
+        if (index >= rowCommands.size()) {
+            onComplete.run();
+            return;
+        }
+        NiimbotV4Protocol.RowCommand rowCommand = rowCommands.get(index);
+        String stage = "ble-write-raster-row-" + index;
+        enqueueWrite(NiimbotV4Protocol.pack(rowCommand.command, rowCommand.data), stage, new WriteCallback() {
+            @Override public void onAccepted() {
+                if (index == 0) session.transferStarted = true;
+                sendRowsSequentially(session, rowCommands, index + 1, onComplete);
+            }
+
+            @Override public void onRejected(String rejectedStage) {
+                failPrint(session, "transmission-failed", "BLE write was not accepted by Android while sending raster row " + (index + 1) + " of " + rowCommands.size() + ".", true, rejectedStage);
+            }
+        });
     }
 
     private boolean requireResponse(PrintSession session, NiimbotResponse response, String operation) {
@@ -372,22 +396,28 @@ public class NativePrintPlugin extends Plugin {
     }
 
     private void failPrint(PrintSession session, String code, String message, boolean recoverable) {
+        failPrint(session, code, message, recoverable, null);
+    }
+
+    private void failPrint(PrintSession session, String code, String message, boolean recoverable, String stage) {
         if (session == null || session.resolved) return;
         session.resolved = true;
         if (activePrintSession == session) activePrintSession = null;
+        writeQueue.clear();
         String resolvedCode = code;
         String resolvedMessage = message;
         if (session.transferStarted && !"unconfirmed-print".equals(code)) {
             resolvedCode = "unconfirmed-print";
             resolvedMessage = message + " The label transfer had already started. Inspect the physical label before retrying.";
         }
-        resolveError(session.call, resolvedCode, resolvedMessage, NIIMBOT_B1_PRO_MODEL_ID, session.deviceId, recoverable);
+        resolveDetailedError(session.call, resolvedCode, resolvedMessage, NIIMBOT_B1_PRO_MODEL_ID, session.deviceId, recoverable, stage, null, null);
     }
 
     private void resolvePrint(PrintSession session, JSObject value) {
         if (session == null || session.resolved) return;
         session.resolved = true;
         if (activePrintSession == session) activePrintSession = null;
+        writeQueue.clear();
         session.call.resolve(ok(value));
     }
 
@@ -592,6 +622,11 @@ public class NativePrintPlugin extends Plugin {
             public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, byte[] value) {
                 handleNotification(value);
             }
+
+            @Override
+            public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+                mainHandler.post(() -> writeQueue.onCharacteristicWriteComplete(status));
+            }
         };
 
         try {
@@ -626,7 +661,7 @@ public class NativePrintPlugin extends Plugin {
         }
     }
 
-    private void sendWait(int command, byte[] data, int wantedResponse, long timeoutMs, ResponseCallback callback) {
+    private void sendWait(int command, byte[] data, int wantedResponse, long timeoutMs, String stage, ResponseCallback callback, WriteFailureCallback failureCallback) {
         ResponseWaiter waiter = new ResponseWaiter(wantedResponse, callback);
         responseWaiters.put(wantedResponse, waiter);
         mainHandler.postDelayed(() -> {
@@ -635,19 +670,36 @@ public class NativePrintPlugin extends Plugin {
                 pending.callback.onResponse(null);
             }
         }, timeoutMs);
-        writeRaw(NiimbotV4Protocol.pack(command, data));
+        enqueueWrite(NiimbotV4Protocol.pack(command, data), stage, new WriteCallback() {
+            @Override public void onAccepted() {}
+
+            @Override public void onRejected(String rejectedStage) {
+                responseWaiters.remove(wantedResponse);
+                failureCallback.onRejected(rejectedStage);
+            }
+        });
+    }
+
+    private void enqueueWrite(byte[] value, String stage, WriteCallback callback) {
+        writeQueue.enqueue(value, stage, new BleWriteQueue.Callback() {
+            @Override public void onAccepted() {
+                callback.onAccepted();
+            }
+
+            @Override public void onRejected(String rejectedStage) {
+                callback.onRejected(rejectedStage);
+            }
+        });
     }
 
     @SuppressLint("MissingPermission")
-    private void writeRaw(byte[] value) {
+    private boolean writeBlePacket(byte[] value, String stage) {
         if (currentGatt == null || currentCharacteristic == null) {
-            throw new IllegalStateException("Printer is not connected.");
+            return false;
         }
         currentCharacteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
         currentCharacteristic.setValue(value);
-        if (!currentGatt.writeCharacteristic(currentCharacteristic)) {
-            throw new IllegalStateException("BLE write was not accepted by Android.");
-        }
+        return currentGatt.writeCharacteristic(currentCharacteristic);
     }
 
     private void handleNotification(byte[] value) {
@@ -795,6 +847,7 @@ public class NativePrintPlugin extends Plugin {
 
     @SuppressLint("MissingPermission")
     private void closeCurrentGatt() {
+        writeQueue.clear();
         if (currentGatt != null) {
             closeGatt(currentGatt);
         }
@@ -845,6 +898,15 @@ public class NativePrintPlugin extends Plugin {
 
     private interface ResponseCallback {
         void onResponse(NiimbotResponse response);
+    }
+
+    private interface WriteCallback {
+        void onAccepted();
+        void onRejected(String stage);
+    }
+
+    private interface WriteFailureCallback {
+        void onRejected(String stage);
     }
 
     private interface IdentifySuccess {
