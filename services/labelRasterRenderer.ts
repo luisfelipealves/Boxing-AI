@@ -69,7 +69,7 @@ const TEXT_LEFT_PX = 350;
 const NUMBER_TOP_PX = 96;
 const NAME_TOP_PX = 238;
 const MAX_SAFE_BOX_NAME_LENGTH = 28;
-const BASE64_CHUNK_SIZE = 0x8000;
+const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
 const FONT_5X7: Record<string, readonly string[]> = {
   ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
@@ -205,21 +205,32 @@ export const renderBoxLabelRaster = ({
 };
 
 const encodeBase64 = (bytes: Uint8Array): string => {
-  if (typeof btoa === 'function') {
-    let binary = '';
-    for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_SIZE) {
-      const chunk = bytes.subarray(offset, offset + BASE64_CHUNK_SIZE);
-      binary += String.fromCharCode(...chunk);
-    }
-    return btoa(binary);
+  let encoded = '';
+  let index = 0;
+
+  for (; index + 2 < bytes.length; index += 3) {
+    const value = ((bytes[index] ?? 0) << 16) | ((bytes[index + 1] ?? 0) << 8) | (bytes[index + 2] ?? 0);
+    encoded += BASE64_ALPHABET[(value >> 18) & 0x3f];
+    encoded += BASE64_ALPHABET[(value >> 12) & 0x3f];
+    encoded += BASE64_ALPHABET[(value >> 6) & 0x3f];
+    encoded += BASE64_ALPHABET[value & 0x3f];
   }
 
-  const nodeBuffer = (globalThis as typeof globalThis & { Buffer?: typeof Buffer }).Buffer;
-  if (nodeBuffer) {
-    return nodeBuffer.from(bytes).toString('base64');
+  const remaining = bytes.length - index;
+  if (remaining === 1) {
+    const value = (bytes[index] ?? 0) << 16;
+    encoded += BASE64_ALPHABET[(value >> 18) & 0x3f];
+    encoded += BASE64_ALPHABET[(value >> 12) & 0x3f];
+    encoded += '==';
+  } else if (remaining === 2) {
+    const value = ((bytes[index] ?? 0) << 16) | ((bytes[index + 1] ?? 0) << 8);
+    encoded += BASE64_ALPHABET[(value >> 18) & 0x3f];
+    encoded += BASE64_ALPHABET[(value >> 12) & 0x3f];
+    encoded += BASE64_ALPHABET[(value >> 6) & 0x3f];
+    encoded += '=';
   }
 
-  throw new LabelRasterRenderError('render-failed', 'No base64 encoder is available for the label raster.');
+  return encoded;
 };
 
 const assertDefaultB1ProProfile = (profile: NiimbotLabelProfile): void => {
