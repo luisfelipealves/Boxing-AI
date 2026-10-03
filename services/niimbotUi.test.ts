@@ -3,6 +3,7 @@ import { B1_PRO_50X30_PROFILE, type NiimbotBridgeErrorCode } from './niimbot';
 import {
   NIIMBOT_PRINT_PROGRESS_STEPS,
   buildNiimbotPrintRequest,
+  getNiimbotBleDiagnostic,
   getNiimbotErrorPresentation,
   isNiimbotPermissionGranted,
 } from './niimbotUi';
@@ -64,6 +65,27 @@ describe('Niimbot B1 Pro print UI helpers', () => {
     expect(isNiimbotPermissionGranted({ bluetoothScan: 'granted', bluetoothConnect: 'granted' })).toBe(true);
     expect(isNiimbotPermissionGranted({ bluetoothScan: 'granted', bluetoothConnect: 'prompt' })).toBe(false);
     expect(isNiimbotPermissionGranted({ bluetoothScan: 'denied', bluetoothConnect: 'granted' })).toBe(false);
+  });
+
+  it('formats native BLE diagnostic details for user-visible troubleshooting', () => {
+    expect(
+      getNiimbotBleDiagnostic({
+        code: 'connection-failed',
+        message: 'Unable to connect',
+        deviceId: 'AA:BB:CC:DD:EE:FF',
+        stage: 'connection-state',
+        gattStatus: 133,
+        bleState: 0,
+      }),
+    ).toBe('BLE diagnostic: stage=connection-state; device=AA:BB:CC:DD:EE:FF; gattStatus=133; bleState=0');
+
+    expect(
+      getNiimbotBleDiagnostic({
+        code: 'missing-gatt-service',
+        message: 'Missing service',
+        diagnostic: 'stage=services-discovered; device=AA:BB; gattStatus=0',
+      }),
+    ).toBe('BLE diagnostic: stage=services-discovered; device=AA:BB; gattStatus=0');
   });
 
   it('builds a stable print request without mutating selected label content between retries', () => {

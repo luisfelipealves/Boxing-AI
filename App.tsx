@@ -59,6 +59,7 @@ import {
 import { renderBoxLabelRaster } from './services/labelRasterRenderer';
 import {
   buildNiimbotPrintRequest,
+  getNiimbotBleDiagnostic,
   getNiimbotErrorPresentation,
   isNiimbotPermissionGranted,
   type NiimbotLabelSnapshot,
@@ -1482,6 +1483,7 @@ const BoxLabelPage = () => {
   const profile = B1_PRO_50X30_PROFILE;
   const canPrint = isAndroid && isPluginAvailable && isNiimbotPermissionGranted(permissions) && Boolean(selectedPrinter) && !isBusy;
   const visibleError = error ? getNiimbotErrorPresentation(error) : null;
+  const visibleBleDiagnostic = getNiimbotBleDiagnostic(error);
   const activeStep = isBusy ? step : null;
 
   const setBridgeError = (bridgeError: NiimbotBridgeError) => {
@@ -1774,6 +1776,7 @@ const BoxLabelPage = () => {
                 <p className="font-bold">{visibleError.title}</p>
                 <p className="mt-1">{visibleError.action}</p>
                 <p className="mt-1 text-xs opacity-80">{error?.message}</p>
+                {visibleBleDiagnostic && <p className="mt-1 text-xs font-mono opacity-80 break-all">{visibleBleDiagnostic}</p>}
                 {visibleError.recoverable && selectedPrinter && (
                   <button
                     onClick={lastLabelSnapshot ? retrySameLabel : printCurrentLabel}

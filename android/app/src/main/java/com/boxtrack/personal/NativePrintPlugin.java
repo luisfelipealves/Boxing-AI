@@ -509,22 +509,19 @@ public class NativePrintPlugin extends Plugin {
         Runnable timeout = () -> {
             if (!preparationGate.tryFinish()) return;
             closeCurrentGatt();
-            resolveError(call, "connection-failed", "Timed out discovering the NIIMBOT B1 Pro BLE service and characteristic.", null, deviceId, true);
+            resolveDetailedError(call, "connection-failed", "Timed out discovering the NIIMBOT B1 Pro BLE service and characteristic.", null, deviceId, true, "discover-services-timeout", null, null);
         };
         mainHandler.postDelayed(timeout, timeoutMs);
-
-        Runnable failConnection = () -> {
-            if (!preparationGate.tryFinish()) return;
-            mainHandler.removeCallbacks(timeout);
-            resolveError(call, "connection-failed", "Unable to connect to the selected NIIMBOT printer.", null, deviceId, true);
-        };
 
         BluetoothGattCallback callback = new BluetoothGattCallback() {
             @Override
             public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     closeGatt(gatt);
-                    failConnection.run();
+                    if (preparationGate.tryFinish()) {
+                        mainHandler.removeCallbacks(timeout);
+                        resolveDetailedError(call, "connection-failed", "Unable to connect to the selected NIIMBOT printer.", null, deviceId, true, "connection-state", status, newState);
+                    }
                     return;
                 }
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
@@ -537,7 +534,7 @@ public class NativePrintPlugin extends Plugin {
                     if (!preparationGate.isFinished()) {
                         if (preparationGate.tryFinish()) {
                             mainHandler.removeCallbacks(timeout);
-                            resolveError(call, "connection-failed", "The NIIMBOT B1 Pro disconnected while discovering its BLE service and characteristic.", null, deviceId, true);
+                            resolveDetailedError(call, "connection-failed", "The NIIMBOT B1 Pro disconnected while discovering its BLE service and characteristic.", null, deviceId, true, "service-discovery-disconnected", status, newState);
                         }
                         return;
                     }
@@ -552,7 +549,7 @@ public class NativePrintPlugin extends Plugin {
                 if (status != BluetoothGatt.GATT_SUCCESS) {
                     if (preparationGate.tryFinish()) {
                         mainHandler.removeCallbacks(timeout);
-                        resolveError(call, "connection-failed", "Unable to discover BLE services on the selected printer.", null, deviceId, true);
+                        resolveDetailedError(call, "connection-failed", "Unable to discover BLE services on the selected printer.", null, deviceId, true, "services-discovered", status, null);
                     }
                     return;
                 }
@@ -560,7 +557,7 @@ public class NativePrintPlugin extends Plugin {
                 if (service == null) {
                     if (preparationGate.tryFinish()) {
                         mainHandler.removeCallbacks(timeout);
-                        resolveError(call, "missing-gatt-service", "The selected device does not expose the NIIMBOT BLE service.", null, deviceId, false);
+                        resolveDetailedError(call, "missing-gatt-service", "The selected device does not expose the NIIMBOT BLE service.", null, deviceId, false, "find-niimbot-service", status, null);
                     }
                     return;
                 }
@@ -568,7 +565,7 @@ public class NativePrintPlugin extends Plugin {
                 if (characteristic == null) {
                     if (preparationGate.tryFinish()) {
                         mainHandler.removeCallbacks(timeout);
-                        resolveError(call, "missing-gatt-characteristic", "The selected device does not expose the NIIMBOT BLE characteristic.", null, deviceId, false);
+                        resolveDetailedError(call, "missing-gatt-characteristic", "The selected device does not expose the NIIMBOT BLE characteristic.", null, deviceId, false, "find-niimbot-characteristic", status, null);
                     }
                     return;
                 }
@@ -761,16 +758,39 @@ public class NativePrintPlugin extends Plugin {
     }
 
     private void resolveError(PluginCall call, String code, String message, Integer modelId, String deviceId, boolean recoverable) {
+        resolveDetailedError(call, code, message, modelId, deviceId, recoverable, null, null, null);
+    }
+
+    private void resolveDetailedError(PluginCall call, String code, String message, Integer modelId, String deviceId, boolean recoverable, String stage, Integer gattStatus, Integer bleState) {
         JSObject error = new JSObject();
         error.put("code", code);
         error.put("message", message);
         if (modelId != null) error.put("modelId", modelId);
         if (deviceId != null) error.put("deviceId", deviceId);
+        if (stage != null) error.put("stage", stage);
+        if (gattStatus != null) error.put("gattStatus", gattStatus);
+        if (bleState != null) error.put("bleState", bleState);
+        String diagnostic = bleDiagnostic(stage, deviceId, gattStatus, bleState);
+        if (diagnostic != null) error.put("diagnostic", diagnostic);
         error.put("recoverable", recoverable);
         JSObject result = new JSObject();
         result.put("ok", false);
         result.put("error", error);
         call.resolve(result);
+    }
+
+    private String bleDiagnostic(String stage, String deviceId, Integer gattStatus, Integer bleState) {
+        StringBuilder builder = new StringBuilder();
+        if (stage != null) builder.append("stage=").append(stage);
+        if (deviceId != null) appendDiagnosticPart(builder, "device", deviceId);
+        if (gattStatus != null) appendDiagnosticPart(builder, "gattStatus", String.valueOf(gattStatus));
+        if (bleState != null) appendDiagnosticPart(builder, "bleState", String.valueOf(bleState));
+        return builder.length() == 0 ? null : builder.toString();
+    }
+
+    private void appendDiagnosticPart(StringBuilder builder, String key, String value) {
+        if (builder.length() > 0) builder.append("; ");
+        builder.append(key).append("=").append(value);
     }
 
     @SuppressLint("MissingPermission")
