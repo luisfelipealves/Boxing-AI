@@ -8,6 +8,8 @@ import {
   renderBoxLabelRaster,
   thresholdRgbaToMonochrome,
 } from './labelRasterRenderer';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const box = (overrides: Partial<Box> = {}): Box => ({
   id: 'box-123',
@@ -87,6 +89,13 @@ describe('label raster renderer', () => {
         value: originalBtoa,
       });
     }
+  });
+
+  it('does not reference Node Buffer in production raster rendering source', () => {
+    const source = readFileSync(resolve(process.cwd(), 'services/labelRasterRenderer.ts'), 'utf8');
+
+    expect(source).not.toContain('Buffer.');
+    expect(source).not.toContain('Buffer.from');
   });
 
   it('fails clearly when asked to render an unsupported profile geometry', () => {
