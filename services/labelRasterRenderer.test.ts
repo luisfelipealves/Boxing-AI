@@ -45,6 +45,34 @@ describe('label raster renderer', () => {
     expect(blackPixels).toBeLessThan(90_000);
   });
 
+  it('renders browser-safe base64 when Node Buffer is unavailable', () => {
+    const globals = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
+    const originalBuffer = globals.Buffer;
+    Object.defineProperty(globalThis, 'Buffer', {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    });
+
+    try {
+      const rendered = renderBoxLabelRaster({
+        box: box(),
+        origin: 'https://example.test',
+        pathname: '/inventory',
+        profile: B1_PRO_50X30_PROFILE,
+      });
+
+      expect(rendered.rasterBase64).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
+      expect(rendered.rasterBase64.length).toBeGreaterThan(0);
+    } finally {
+      Object.defineProperty(globalThis, 'Buffer', {
+        configurable: true,
+        writable: true,
+        value: originalBuffer,
+      });
+    }
+  });
+
   it('fails clearly when asked to render an unsupported profile geometry', () => {
     expect(() =>
       renderBoxLabelRaster({

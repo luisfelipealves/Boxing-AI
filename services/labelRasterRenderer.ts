@@ -69,6 +69,7 @@ const TEXT_LEFT_PX = 350;
 const NUMBER_TOP_PX = 96;
 const NAME_TOP_PX = 238;
 const MAX_SAFE_BOX_NAME_LENGTH = 28;
+const BASE64_CHUNK_SIZE = 0x8000;
 
 const FONT_5X7: Record<string, readonly string[]> = {
   ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000'],
@@ -195,12 +196,30 @@ export const renderBoxLabelRaster = ({
       boxNameText,
       pixels: bitmap.pixels,
       packedRows,
-      rasterBase64: Buffer.from(packedRows).toString('base64'),
+      rasterBase64: encodeBase64(packedRows),
     };
   } catch (error) {
     if (error instanceof LabelRasterRenderError) throw error;
     throw new LabelRasterRenderError('render-failed', error instanceof Error ? error.message : 'Label raster rendering failed.');
   }
+};
+
+const encodeBase64 = (bytes: Uint8Array): string => {
+  if (typeof btoa === 'function') {
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_SIZE) {
+      const chunk = bytes.subarray(offset, offset + BASE64_CHUNK_SIZE);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  }
+
+  const nodeBuffer = (globalThis as typeof globalThis & { Buffer?: typeof Buffer }).Buffer;
+  if (nodeBuffer) {
+    return nodeBuffer.from(bytes).toString('base64');
+  }
+
+  throw new LabelRasterRenderError('render-failed', 'No base64 encoder is available for the label raster.');
 };
 
 const assertDefaultB1ProProfile = (profile: NiimbotLabelProfile): void => {

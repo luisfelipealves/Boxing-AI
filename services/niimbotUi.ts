@@ -121,6 +121,20 @@ export const getNiimbotErrorPresentation = (error: NiimbotBridgeError): NiimbotE
   };
 };
 
+export const getNiimbotBleDiagnostic = (error: NiimbotBridgeError | null | undefined): string | null => {
+  if (!error) return null;
+  if (error.diagnostic) return `BLE diagnostic: ${error.diagnostic}`;
+
+  const parts = [
+    error.stage ? `stage=${error.stage}` : null,
+    error.deviceId ? `device=${error.deviceId}` : null,
+    typeof error.gattStatus === 'number' ? `gattStatus=${error.gattStatus}` : null,
+    typeof error.bleState === 'number' ? `bleState=${error.bleState}` : null,
+  ].filter((part): part is string => Boolean(part));
+
+  return parts.length > 0 ? `BLE diagnostic: ${parts.join('; ')}` : null;
+};
+
 export const buildNiimbotPrintRequest = (
   deviceId: string,
   _labelSnapshot: NiimbotLabelSnapshot,

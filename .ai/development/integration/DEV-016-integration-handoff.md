@@ -57,3 +57,24 @@ Validation:
 - `npm run test` — passed, 7 test files / 35 tests.
 - `npm run build` — passed. Existing warnings: bundle chunk over 500 kB and Browserslist data age.
 - `git diff --check` — passed.
+
+# Follow-up Root Cause Fix — 2026-10-03T03:16:14Z
+
+Human feedback after DEV-016 reported that the B1 Pro is found, the app connects, the printer LED turns green, but tapping “Print current label to NIIMBOT B1 Pro” shows “Label rendering is not ready”. Investigation traced the failure to browser/WebView execution of `services/labelRasterRenderer.ts`: it used Node's `Buffer.from(...).toString('base64')` to encode packed raster bytes. That works in Vitest/Node but fails in the Android WebView before the native BLE `printLabel` call is reached.
+
+Fix applied on this integration branch:
+
+- Replaced renderer `Buffer` usage with a browser-safe base64 encoder that uses `btoa` in chunks and keeps `Buffer` only as a Node fallback.
+- Added a regression test that removes `globalThis.Buffer` and verifies raster rendering still produces base64.
+- Added native BLE diagnostic fields for connection/service-discovery failures: `stage`, `gattStatus`, `bleState`, and `diagnostic`.
+- Added UI rendering for BLE diagnostics below the normal error message so hardware failures include details the user can report.
+
+Validation:
+
+- `npm test -- --run services/labelRasterRenderer.test.ts` — first failed before the fix with `LabelRasterRenderError: Cannot read properties of undefined (reading 'from')`, then passed after the fix.
+- `npm test -- --run services/labelRasterRenderer.test.ts services/niimbotUi.test.ts` — passed, 2 files / 12 tests.
+- `npm run test` — passed, 7 test files / 37 tests.
+- `npm run build` — passed. Existing warnings: bundle chunk over 500 kB and Browserslist data age.
+- `npx cap sync android` — passed.
+- `git diff --check` — passed.
+- `./gradlew :app:assembleDebug` — VALIDATION_NOT_RUN: failed before Java compilation because Android SDK location is not configured. `ANDROID_HOME` is unset and `android/local.properties` has no `sdk.dir`.

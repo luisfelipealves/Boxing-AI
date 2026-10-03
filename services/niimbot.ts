@@ -179,6 +179,10 @@ export interface NiimbotBridgeError {
   readonly message: string;
   readonly modelId?: number;
   readonly deviceId?: string;
+  readonly stage?: string;
+  readonly gattStatus?: number;
+  readonly bleState?: number;
+  readonly diagnostic?: string;
   readonly recoverable?: boolean;
 }
 
