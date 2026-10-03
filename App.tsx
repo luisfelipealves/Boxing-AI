@@ -68,6 +68,28 @@ import {
 
 const NiimbotBlePrinter = registerPlugin<NiimbotNativeBlePrinterPlugin>('NiimbotBlePrinter');
 
+type NiimbotChecklistState = 'active' | 'complete' | 'failed' | 'pending';
+
+interface NiimbotTraceEntry {
+  readonly id: number;
+  readonly time: string;
+  readonly message: string;
+  readonly detail?: string;
+}
+
+const NIIMBOT_SETUP_STEPS: readonly { readonly id: NiimbotPrintProgressStep; readonly label: string }[] = [
+  { id: 'permission/setup', label: 'Grant Bluetooth access' },
+  { id: 'scanning', label: 'Scan for NIIMBOT B1 Pro' },
+  { id: 'identifying', label: 'Prepare selected B1 Pro' },
+  { id: 'rendering', label: 'Render 50 × 30 mm label' },
+  { id: 'sending', label: 'Send over BLE' },
+  { id: 'printing/confirming', label: 'Confirm print result' },
+];
+
+const NIIMBOT_STEP_ORDER = new Map<NiimbotPrintProgressStep, number>(
+  NIIMBOT_SETUP_STEPS.map((entry, index) => [entry.id, index]),
+);
+
 const getBlockedDeleteMessage = (error: unknown): string | undefined => {
   if (!storage.isDeleteBlockedByDependenciesError(error)) return undefined;
 
@@ -1431,8 +1453,10 @@ const BoxLabelPage = () => {
   const [candidates, setCandidates] = useState<readonly NiimbotBridgeDevice[]>([]);
   const [step, setStep] = useState<NiimbotPrintProgressStep>('permission/setup');
   const [error, setError] = useState<NiimbotBridgeError | null>(null);
+  const [failedStep, setFailedStep] = useState<NiimbotPrintProgressStep | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [lastLabelSnapshot, setLastLabelSnapshot] = useState<NiimbotLabelSnapshot | null>(null);
+  const [traceEntries, setTraceEntries] = useState<readonly NiimbotTraceEntry[]>([]);
   const isAndroid = Capacitor.getPlatform() === 'android';
   const isPluginAvailable = Capacitor.isPluginAvailable('NiimbotBlePrinter');
 
@@ -1486,16 +1510,76 @@ const BoxLabelPage = () => {
   const visibleBleDiagnostic = getNiimbotBleDiagnostic(error);
   const activeStep = isBusy ? step : null;
 
+  const appendTrace = (message: string, detail?: string) => {
+    setTraceEntries(previous => [
+      ...previous,
+      {
+        id: Date.now() + previous.length,
+        time: new Date().toLocaleTimeString(),
+        message,
+        detail,
+      },
+    ].slice(-80));
+  };
+
+  const setFlowStep = (nextStep: NiimbotPrintProgressStep, traceMessage: string, detail?: string) => {
+    setStep(nextStep);
+    appendTrace(traceMessage, detail);
+  };
+
+  const getStepState = (stepId: NiimbotPrintProgressStep): NiimbotChecklistState => {
+    if (failedStep === stepId) return 'failed';
+    if (activeStep === stepId) return 'active';
+    if (step === 'success') return 'complete';
+
+    const currentOrder = NIIMBOT_STEP_ORDER.get(step);
+    const stepOrder = NIIMBOT_STEP_ORDER.get(stepId);
+    if (typeof currentOrder === 'number' && typeof stepOrder === 'number' && stepOrder < currentOrder) return 'complete';
+    if (!isBusy && step === stepId && !failedStep) return 'complete';
+    return 'pending';
+  };
+
+  const getStepClassName = (state: NiimbotChecklistState): string => {
+    switch (state) {
+      case 'active':
+        return 'text-indigo-600 dark:text-indigo-400 font-semibold';
+      case 'complete':
+        return 'text-emerald-700 dark:text-emerald-300 font-semibold';
+      case 'failed':
+        return 'text-red-700 dark:text-red-300 font-semibold';
+      case 'pending':
+      default:
+        return 'text-gray-500 dark:text-gray-400';
+    }
+  };
+
+  const renderStepIcon = (state: NiimbotChecklistState) => {
+    switch (state) {
+      case 'active':
+        return <Loader2 className="animate-spin" size={14} />;
+      case 'failed':
+        return <AlertTriangle size={14} />;
+      case 'complete':
+        return <Check size={14} />;
+      case 'pending':
+      default:
+        return <Check className="opacity-30" size={14} />;
+    }
+  };
+
   const setBridgeError = (bridgeError: NiimbotBridgeError) => {
     setError(bridgeError);
+    setFailedStep(step);
     setStep('failure');
+    appendTrace('Flow failed', `${bridgeError.code}: ${bridgeError.message}${bridgeError.diagnostic ? ` · ${bridgeError.diagnostic}` : ''}`);
   };
 
   const requestPermissions = async () => {
     if (!isPluginAvailable) return;
     setIsBusy(true);
     setError(null);
-    setStep('permission/setup');
+    setFailedStep(null);
+    setFlowStep('permission/setup', 'Request Bluetooth permissions started');
     try {
       const result = await NiimbotBlePrinter.requestPermissions();
       if (!result.ok) {
@@ -1503,6 +1587,7 @@ const BoxLabelPage = () => {
         return;
       }
       setPermissions(result.value);
+      appendTrace('Request Bluetooth permissions completed', `scan=${result.value.bluetoothScan}; connect=${result.value.bluetoothConnect}`);
     } finally {
       setIsBusy(false);
     }
@@ -1512,7 +1597,8 @@ const BoxLabelPage = () => {
     if (!isPluginAvailable) return;
     setIsBusy(true);
     setError(null);
-    setStep('scanning');
+    setFailedStep(null);
+    setFlowStep('scanning', 'Scan for NIIMBOT B1 Pro started', `service=${profile.serviceUuid}; timeoutMs=10000`);
     try {
       const result = await NiimbotBlePrinter.scan({ serviceUuid: profile.serviceUuid, timeoutMs: 10_000 });
       if (!result.ok) {
@@ -1520,6 +1606,7 @@ const BoxLabelPage = () => {
         return;
       }
       setCandidates(result.value);
+      appendTrace('Scan for NIIMBOT B1 Pro completed', `candidates=${result.value.length}`);
       if (result.value.length === 0) {
         setBridgeError({ code: 'no-printer-found', message: 'No NIIMBOT B1 Pro candidates were found.', recoverable: true });
       }
@@ -1531,7 +1618,8 @@ const BoxLabelPage = () => {
   const identifySelectedPrinter = async (device: NiimbotBridgeDevice) => {
     setIsBusy(true);
     setError(null);
-    setStep('identifying');
+    setFailedStep(null);
+    setFlowStep('identifying', 'Prepare selected B1 Pro started', `${device.name || 'NIIMBOT candidate'} · ${device.address || device.deviceId}`);
     try {
       const identifyResult = await NiimbotBlePrinter.identify({ deviceId: device.deviceId, timeoutMs: 10_000 });
       if (!identifyResult.ok) {
@@ -1539,6 +1627,7 @@ const BoxLabelPage = () => {
         return;
       }
       setSelectedPrinter(identifyResult.value);
+      appendTrace('Prepare selected B1 Pro completed', `${identifyResult.value.displayName}; model=${identifyResult.value.modelId}; profile=${identifyResult.value.profile.id}`);
     } finally {
       setIsBusy(false);
     }
@@ -1546,6 +1635,7 @@ const BoxLabelPage = () => {
 
   const reconnectSelectedPrinter = async () => {
     if (!selectedPrinter) return;
+    appendTrace('Reconnect selected B1 Pro requested', `${selectedPrinter.displayName} · ${selectedPrinter.reconnectId}`);
     await identifySelectedPrinter({
       deviceId: selectedPrinter.reconnectId,
       name: selectedPrinter.displayName,
@@ -1557,7 +1647,8 @@ const BoxLabelPage = () => {
     if (!isPluginAvailable) return;
     setIsBusy(true);
     setError(null);
-    setStep('permission/setup');
+    setFailedStep(null);
+    setFlowStep('permission/setup', 'Forget selected B1 Pro started');
     try {
       const result = await NiimbotBlePrinter.forgetSelectedPrinter();
       if (!result.ok) {
@@ -1567,6 +1658,7 @@ const BoxLabelPage = () => {
       setSelectedPrinter(null);
       setCandidates([]);
       setLastLabelSnapshot(null);
+      appendTrace('Forget selected B1 Pro completed');
     } finally {
       setIsBusy(false);
     }
@@ -1578,8 +1670,10 @@ const BoxLabelPage = () => {
     if (!selectedPrinter) return;
     setIsBusy(true);
     setError(null);
+    setFailedStep(null);
+    appendTrace('Print current label requested', `box=${snapshot.boxNumber ?? 'missing'}; printer=${selectedPrinter.displayName}; retry=${lastLabelSnapshot ? 'yes' : 'no'}`);
     try {
-      setStep('rendering');
+      setFlowStep('rendering', 'Render label raster started', `profile=${profile.id}; target=${profile.rasterWidthPx}×${profile.rasterHeightPx}`);
       let labelRaster: ReturnType<typeof renderBoxLabelRaster>;
       try {
         labelRaster = renderBoxLabelRaster({
@@ -1596,6 +1690,7 @@ const BoxLabelPage = () => {
           profile,
         });
       } catch (renderError) {
+        appendTrace('Render label raster failed', renderError instanceof Error ? renderError.message : 'Unknown render error');
         setBridgeError({
           code: 'invalid-raster',
           message: renderError instanceof Error ? renderError.message : 'Unable to render the 50 × 30 mm B1 Pro label raster.',
@@ -1603,17 +1698,19 @@ const BoxLabelPage = () => {
         });
         return;
       }
+      appendTrace('Render label raster completed', `${labelRaster.widthPx}×${labelRaster.heightPx}; bytesPerRow=${labelRaster.bytesPerRow}; base64Length=${labelRaster.rasterBase64.length}`);
       const request = {
         ...buildNiimbotPrintRequest(selectedPrinter.reconnectId, snapshot),
         rasterBase64: labelRaster.rasterBase64,
       };
-      setStep('sending');
+      setFlowStep('sending', 'Send label over BLE started', `device=${request.deviceId}; copies=${request.copies}`);
       const result = await NiimbotBlePrinter.printLabel(request);
       if (!result.ok) {
         setBridgeError(result.error);
         return;
       }
-      setStep(result.value.confirmed ? 'success' : 'printing/confirming');
+      appendTrace('Send label over BLE completed', `confirmed=${result.value.confirmed ? 'yes' : 'no'}`);
+      setFlowStep(result.value.confirmed ? 'success' : 'printing/confirming', result.value.confirmed ? 'Print confirmed by B1 Pro' : 'Print confirmation missing');
       if (!result.value.confirmed) {
         setBridgeError({
           code: 'unconfirmed-print',
@@ -1629,6 +1726,7 @@ const BoxLabelPage = () => {
 
   const retrySameLabel = async () => {
     if (!selectedPrinter || !lastLabelSnapshot) return;
+    appendTrace('Retry same label requested', `box=${lastLabelSnapshot.boxNumber ?? 'missing'}; printer=${selectedPrinter.displayName}`);
     await printCurrentLabel();
   };
 
@@ -1704,19 +1802,15 @@ const BoxLabelPage = () => {
                 {isBusy && <Loader2 className="animate-spin text-indigo-500" size={18} />}
               </div>
               <ol className="space-y-2 text-sm">
-                {[
-                  ['permission/setup', 'Grant Bluetooth access'],
-                  ['scanning', 'Scan for NIIMBOT B1 Pro'],
-                  ['identifying', 'Prepare selected B1 Pro'],
-                  ['rendering', 'Render 50 × 30 mm label'],
-                  ['sending', 'Send over BLE'],
-                  ['printing/confirming', 'Confirm print result'],
-                ].map(([stepId, label]) => (
-                  <li key={stepId} className={`flex items-center gap-2 ${activeStep === stepId ? 'text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {activeStep === stepId ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
-                    {label}
-                  </li>
-                ))}
+                {NIIMBOT_SETUP_STEPS.map(({ id: stepId, label }) => {
+                  const stepState = getStepState(stepId);
+                  return (
+                    <li key={stepId} className={`flex items-center gap-2 ${getStepClassName(stepState)}`}>
+                      {renderStepIcon(stepState)}
+                      {label}
+                    </li>
+                  );
+                })}
               </ol>
             </div>
 
@@ -1794,6 +1888,31 @@ const BoxLabelPage = () => {
                 Print confirmed by the NIIMBOT B1 Pro.
               </div>
             )}
+
+            <div className="bg-slate-950 text-slate-100 p-4 rounded-2xl border border-slate-800 shadow-sm">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <h3 className="font-semibold">NIIMBOT print trace</h3>
+                  <p className="text-xs text-slate-400 mt-1">Print trace entries are shown newest last for hardware debugging.</p>
+                </div>
+                <button
+                  onClick={() => setTraceEntries([])}
+                  className="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="max-h-56 overflow-y-auto space-y-2 text-xs font-mono">
+                {traceEntries.length === 0 ? (
+                  <p className="text-slate-500">No print trace entries yet.</p>
+                ) : traceEntries.map(entry => (
+                  <div key={entry.id} className="border-l-2 border-slate-700 pl-2">
+                    <p><span className="text-slate-500">{entry.time}</span> <span className="text-slate-100">{entry.message}</span></p>
+                    {entry.detail && <p className="text-slate-400 break-all">{entry.detail}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
 
             <button
               onClick={printCurrentLabel}
