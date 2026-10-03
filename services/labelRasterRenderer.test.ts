@@ -45,10 +45,22 @@ describe('label raster renderer', () => {
     expect(blackPixels).toBeLessThan(90_000);
   });
 
-  it('renders browser-safe base64 when Node Buffer is unavailable', () => {
-    const globals = globalThis as typeof globalThis & { Buffer?: typeof Buffer };
+  it('renders browser-safe base64 when Node Buffer and btoa are unavailable', () => {
+    const expected = renderBoxLabelRaster({
+      box: box(),
+      origin: 'https://example.test',
+      pathname: '/inventory',
+      profile: B1_PRO_50X30_PROFILE,
+    }).rasterBase64;
+    const globals = globalThis as typeof globalThis & { Buffer?: typeof Buffer; btoa?: typeof btoa };
     const originalBuffer = globals.Buffer;
+    const originalBtoa = globals.btoa;
     Object.defineProperty(globalThis, 'Buffer', {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    });
+    Object.defineProperty(globalThis, 'btoa', {
       configurable: true,
       writable: true,
       value: undefined,
@@ -62,13 +74,17 @@ describe('label raster renderer', () => {
         profile: B1_PRO_50X30_PROFILE,
       });
 
-      expect(rendered.rasterBase64).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
-      expect(rendered.rasterBase64.length).toBeGreaterThan(0);
+      expect(rendered.rasterBase64).toBe(expected);
     } finally {
       Object.defineProperty(globalThis, 'Buffer', {
         configurable: true,
         writable: true,
         value: originalBuffer,
+      });
+      Object.defineProperty(globalThis, 'btoa', {
+        configurable: true,
+        writable: true,
+        value: originalBtoa,
       });
     }
   });
