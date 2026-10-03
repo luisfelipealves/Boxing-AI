@@ -2,7 +2,7 @@
 id: DEV-019
 type: development
 title: Add NIIMBOT print trace panel and fix setup checklist state colors
-status: HUMAN_TESTING
+status: MERGED
 source:
   - PD-010
   - Human feedback: "crie um painel de trace do processo de impressao na niimbot. logue ai tudo o que for feito para saber se falta algo. tambem acerte os checkmarks pois nao estao mudando de cor. Label rendering is not ready ... Buffer is not defined"
@@ -13,7 +13,7 @@ assigned_agent: Hermes
 branch: agent/dev-019-niimbot-print-trace
 worktree: /home/felipe/projetos/Boxing-AI/worktrees/dev-019-niimbot-print-trace
 started_at: 2026-10-03T06:45:00Z
-updated_at: 2026-10-03T07:01:48Z
+updated_at: 2026-10-03T07:03:38Z
 completed_at: 2026-10-03T06:58:52Z
 ---
 
@@ -111,4 +111,4 @@ Manual validation steps:
 9. If a failure occurs, confirm the failed checklist row turns red, later rows remain pending/gray, and the trace shows the exact error message.
 10. Specifically verify that `Buffer is not defined` no longer appears during label rendering; if any error remains, copy the trace panel text.
 
-Merge status: NOT MERGED — awaiting explicit human approval.
+Merge status: MERGED to `main` for tag `v0.0.28` after explicit human instruction “merge e tag”.
