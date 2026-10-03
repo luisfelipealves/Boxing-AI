@@ -94,6 +94,6 @@ Branch: `agent/dev-020-niimbot-pageend-timeout`
 
 Worktree: `/home/felipe/projetos/Boxing-AI/worktrees/dev-020-niimbot-pageend-timeout`
 
-Commit: `38a1a55e76fcd1c4e395fd18ccba71b302e02ba9`
+Implementation commit: `0f3420b2c17c87eabe6c758efbff58d0ab983cdb`
 
 Status: implemented; awaiting independent review and hardware validation.
