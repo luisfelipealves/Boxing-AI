@@ -59,16 +59,16 @@ import {
 import { renderBoxLabelRaster } from './services/labelRasterRenderer';
 import {
   buildNiimbotPrintRequest,
+  getNiimbotChecklistStepState,
   getNiimbotBleDiagnostic,
   getNiimbotErrorPresentation,
   isNiimbotPermissionGranted,
+  type NiimbotChecklistState,
   type NiimbotLabelSnapshot,
   type NiimbotPrintProgressStep,
 } from './services/niimbotUi';
 
 const NiimbotBlePrinter = registerPlugin<NiimbotNativeBlePrinterPlugin>('NiimbotBlePrinter');
-
-type NiimbotChecklistState = 'active' | 'complete' | 'failed' | 'pending';
 
 interface NiimbotTraceEntry {
   readonly id: number;
@@ -85,10 +85,6 @@ const NIIMBOT_SETUP_STEPS: readonly { readonly id: NiimbotPrintProgressStep; rea
   { id: 'sending', label: 'Send over BLE' },
   { id: 'printing/confirming', label: 'Confirm print result' },
 ];
-
-const NIIMBOT_STEP_ORDER = new Map<NiimbotPrintProgressStep, number>(
-  NIIMBOT_SETUP_STEPS.map((entry, index) => [entry.id, index]),
-);
 
 const getBlockedDeleteMessage = (error: unknown): string | undefined => {
   if (!storage.isDeleteBlockedByDependenciesError(error)) return undefined;
@@ -1454,6 +1450,7 @@ const BoxLabelPage = () => {
   const [step, setStep] = useState<NiimbotPrintProgressStep>('permission/setup');
   const [error, setError] = useState<NiimbotBridgeError | null>(null);
   const [failedStep, setFailedStep] = useState<NiimbotPrintProgressStep | null>(null);
+  const [flowStarted, setFlowStarted] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [lastLabelSnapshot, setLastLabelSnapshot] = useState<NiimbotLabelSnapshot | null>(null);
   const [traceEntries, setTraceEntries] = useState<readonly NiimbotTraceEntry[]>([]);
@@ -1523,20 +1520,20 @@ const BoxLabelPage = () => {
   };
 
   const setFlowStep = (nextStep: NiimbotPrintProgressStep, traceMessage: string, detail?: string) => {
+    setFlowStarted(true);
     setStep(nextStep);
     appendTrace(traceMessage, detail);
   };
 
   const getStepState = (stepId: NiimbotPrintProgressStep): NiimbotChecklistState => {
-    if (failedStep === stepId) return 'failed';
-    if (activeStep === stepId) return 'active';
-    if (step === 'success') return 'complete';
-
-    const currentOrder = NIIMBOT_STEP_ORDER.get(step);
-    const stepOrder = NIIMBOT_STEP_ORDER.get(stepId);
-    if (typeof currentOrder === 'number' && typeof stepOrder === 'number' && stepOrder < currentOrder) return 'complete';
-    if (!isBusy && step === stepId && !failedStep) return 'complete';
-    return 'pending';
+    return getNiimbotChecklistStepState({
+      stepId,
+      currentStep: step,
+      activeStep,
+      failedStep,
+      isBusy,
+      hasStarted: flowStarted,
+    });
   };
 
   const getStepClassName = (state: NiimbotChecklistState): string => {
@@ -1567,9 +1564,9 @@ const BoxLabelPage = () => {
     }
   };
 
-  const setBridgeError = (bridgeError: NiimbotBridgeError) => {
+  const setBridgeError = (bridgeError: NiimbotBridgeError, failedAt: NiimbotPrintProgressStep = step) => {
     setError(bridgeError);
-    setFailedStep(step);
+    setFailedStep(failedAt);
     setStep('failure');
     appendTrace('Flow failed', `${bridgeError.code}: ${bridgeError.message}${bridgeError.diagnostic ? ` · ${bridgeError.diagnostic}` : ''}`);
   };
@@ -1583,7 +1580,7 @@ const BoxLabelPage = () => {
     try {
       const result = await NiimbotBlePrinter.requestPermissions();
       if (!result.ok) {
-        setBridgeError(result.error);
+        setBridgeError(result.error, 'permission/setup');
         return;
       }
       setPermissions(result.value);
@@ -1602,13 +1599,13 @@ const BoxLabelPage = () => {
     try {
       const result = await NiimbotBlePrinter.scan({ serviceUuid: profile.serviceUuid, timeoutMs: 10_000 });
       if (!result.ok) {
-        setBridgeError(result.error);
+        setBridgeError(result.error, 'scanning');
         return;
       }
       setCandidates(result.value);
       appendTrace('Scan for NIIMBOT B1 Pro completed', `candidates=${result.value.length}`);
       if (result.value.length === 0) {
-        setBridgeError({ code: 'no-printer-found', message: 'No NIIMBOT B1 Pro candidates were found.', recoverable: true });
+        setBridgeError({ code: 'no-printer-found', message: 'No NIIMBOT B1 Pro candidates were found.', recoverable: true }, 'scanning');
       }
     } finally {
       setIsBusy(false);
@@ -1623,7 +1620,7 @@ const BoxLabelPage = () => {
     try {
       const identifyResult = await NiimbotBlePrinter.identify({ deviceId: device.deviceId, timeoutMs: 10_000 });
       if (!identifyResult.ok) {
-        setBridgeError(identifyResult.error);
+        setBridgeError(identifyResult.error, 'identifying');
         return;
       }
       setSelectedPrinter(identifyResult.value);
@@ -1652,7 +1649,7 @@ const BoxLabelPage = () => {
     try {
       const result = await NiimbotBlePrinter.forgetSelectedPrinter();
       if (!result.ok) {
-        setBridgeError(result.error);
+        setBridgeError(result.error, 'permission/setup');
         return;
       }
       setSelectedPrinter(null);
@@ -1695,7 +1692,7 @@ const BoxLabelPage = () => {
           code: 'invalid-raster',
           message: renderError instanceof Error ? renderError.message : 'Unable to render the 50 × 30 mm B1 Pro label raster.',
           recoverable: true,
-        });
+        }, 'rendering');
         return;
       }
       appendTrace('Render label raster completed', `${labelRaster.widthPx}×${labelRaster.heightPx}; bytesPerRow=${labelRaster.bytesPerRow}; base64Length=${labelRaster.rasterBase64.length}`);
@@ -1706,7 +1703,7 @@ const BoxLabelPage = () => {
       setFlowStep('sending', 'Send label over BLE started', `device=${request.deviceId}; copies=${request.copies}`);
       const result = await NiimbotBlePrinter.printLabel(request);
       if (!result.ok) {
-        setBridgeError(result.error);
+        setBridgeError(result.error, 'sending');
         return;
       }
       appendTrace('Send label over BLE completed', `confirmed=${result.value.confirmed ? 'yes' : 'no'}`);
@@ -1716,7 +1713,7 @@ const BoxLabelPage = () => {
           code: 'unconfirmed-print',
           message: 'The B1 Pro transfer finished but print confirmation was not received.',
           recoverable: true,
-        });
+        }, 'printing/confirming');
         return;
       }
     } finally {

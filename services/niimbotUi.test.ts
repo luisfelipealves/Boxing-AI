@@ -3,6 +3,7 @@ import { B1_PRO_50X30_PROFILE, type NiimbotBridgeErrorCode } from './niimbot';
 import {
   NIIMBOT_PRINT_PROGRESS_STEPS,
   buildNiimbotPrintRequest,
+  getNiimbotChecklistStepState,
   getNiimbotBleDiagnostic,
   getNiimbotErrorPresentation,
   isNiimbotPermissionGranted,
@@ -65,6 +66,32 @@ describe('Niimbot B1 Pro print UI helpers', () => {
     expect(isNiimbotPermissionGranted({ bluetoothScan: 'granted', bluetoothConnect: 'granted' })).toBe(true);
     expect(isNiimbotPermissionGranted({ bluetoothScan: 'granted', bluetoothConnect: 'prompt' })).toBe(false);
     expect(isNiimbotPermissionGranted({ bluetoothScan: 'denied', bluetoothConnect: 'granted' })).toBe(false);
+  });
+
+  it('keeps initial checklist rows pending until a step actually runs or completes', () => {
+    expect(getNiimbotChecklistStepState({ stepId: 'permission/setup', currentStep: 'permission/setup', isBusy: false })).toBe('pending');
+    expect(getNiimbotChecklistStepState({ stepId: 'scanning', currentStep: 'permission/setup', isBusy: false })).toBe('pending');
+  });
+
+  it('marks the explicit failed step instead of inferring failure from stale current state', () => {
+    expect(
+      getNiimbotChecklistStepState({
+        stepId: 'rendering',
+        currentStep: 'identifying',
+        activeStep: null,
+        failedStep: 'rendering',
+        isBusy: false,
+      }),
+    ).toBe('failed');
+    expect(
+      getNiimbotChecklistStepState({
+        stepId: 'identifying',
+        currentStep: 'identifying',
+        activeStep: null,
+        failedStep: 'rendering',
+        isBusy: false,
+      }),
+    ).toBe('pending');
   });
 
   it('formats native BLE diagnostic details for user-visible troubleshooting', () => {

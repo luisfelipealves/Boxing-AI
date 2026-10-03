@@ -13,8 +13,8 @@ assigned_agent: Hermes
 branch: agent/dev-019-niimbot-print-trace
 worktree: /home/felipe/projetos/Boxing-AI/worktrees/dev-019-niimbot-print-trace
 started_at: 2026-10-03T06:45:00Z
-updated_at: 2026-10-03T06:50:59Z
-completed_at: 2026-10-03T06:50:59Z
+updated_at: 2026-10-03T06:56:00Z
+completed_at: 2026-10-03T06:56:00Z
 ---
 
 # Objective
@@ -73,7 +73,9 @@ DEV-018 must be present because this trace panel is for the latest serialized BL
 # Validation Result
 
 - `npm test -- --run services/niimbotBleFlowSource.test.ts services/labelRasterRenderer.test.ts` — passed, 2 files / 13 tests.
-- `npm run test` — passed, 7 files / 40 tests after `npm ci` restored worktree-local dependencies.
+- Independent review found blocking checklist-state issues; fixed by extracting `getNiimbotChecklistStepState`, tracking whether flow has started, and passing the explicit failed step to `setBridgeError`.
+- `npm test -- --run services/niimbotUi.test.ts services/niimbotBleFlowSource.test.ts services/labelRasterRenderer.test.ts` — passed, 3 files / 20 tests.
+- `npm run test` — passed, 7 files / 42 tests after `npm ci` restored worktree-local dependencies.
 - `npm run build` — passed with existing Vite chunk-size and Browserslist-age warnings.
 - `npx cap sync android` — passed; generated worktree-relative Gradle path was not committed.
 - `cd android && ./gradlew :app:testDebugUnitTest` — VALIDATION_NOT_RUN: Android SDK location is not configured (`ANDROID_HOME` unset and no `android/local.properties` sdk.dir).

@@ -38,7 +38,7 @@ describe('NIIMBOT BLE App flow source guards', () => {
 
   it('does not keep the prepare step visually active after identify is no longer busy', () => {
     expect(appSource).toContain('const activeStep = isBusy ? step : null;');
-    expect(appSource).toContain('if (activeStep === stepId) return \'active\';');
+    expect(appSource).toContain('activeStep,');
     expect(appSource).toContain('renderStepIcon(stepState)');
   });
 
@@ -54,7 +54,11 @@ describe('NIIMBOT BLE App flow source guards', () => {
   });
 
   it('uses completed, active, failed, and pending styles for B1 Pro checklist rows', () => {
-    expect(appSource).toContain('const getStepState = (stepId: NiimbotPrintProgressStep): NiimbotChecklistState =>');
+    expect(appSource).toContain('getNiimbotChecklistStepState({');
+    expect(appSource).toContain('hasStarted: flowStarted');
+    expect(appSource).toContain('const setBridgeError = (bridgeError: NiimbotBridgeError, failedAt: NiimbotPrintProgressStep = step) =>');
+    expect(appSource).toContain('setBridgeError(result.error, \'scanning\')');
+    expect(appSource).toContain("}, 'rendering');");
     expect(appSource).toContain("case 'complete':");
     expect(appSource).toContain("text-emerald-700");
     expect(appSource).toContain("case 'failed':");
