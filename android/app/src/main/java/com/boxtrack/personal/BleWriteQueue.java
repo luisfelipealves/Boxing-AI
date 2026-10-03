@@ -5,8 +5,8 @@ import java.util.Arrays;
 import java.util.Queue;
 
 final class BleWriteQueue {
-    static final int DEFAULT_MAX_ATTEMPTS = 3;
-    static final long DEFAULT_RETRY_DELAY_MS = 25L;
+    static final int DEFAULT_MAX_ATTEMPTS = 30;
+    static final long DEFAULT_RETRY_DELAY_MS = 4L;
     static final long DEFAULT_FALLBACK_COMPLETE_DELAY_MS = 20L;
 
     interface Transport {

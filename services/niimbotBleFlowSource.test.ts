@@ -80,4 +80,12 @@ describe('NIIMBOT BLE App flow source guards', () => {
     expect(nativePrintSource).toContain('"ble-write-initial-connect"');
     expect(nativePrintSource).toContain('INITIAL_CONNECTION_SETTLE_MS = 200L');
   });
+
+  it('uses B1 Pro paced BLE writes with a reference retry budget', () => {
+    expect(nativePrintSource).toContain('BLE_WRITE_MAX_ATTEMPTS = 30');
+    expect(nativePrintSource).toContain('BLE_WRITE_RETRY_DELAY_MS = 4L');
+    expect(nativePrintSource).toContain('BLE_WRITE_PACE_MS = 20L');
+    expect(nativePrintSource).toContain('bleWriteMaxAttempts');
+    expect(nativePrintSource).toContain('bleWritePaceMs');
+  });
 });

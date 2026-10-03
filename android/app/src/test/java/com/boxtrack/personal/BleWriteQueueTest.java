@@ -61,6 +61,27 @@ public class BleWriteQueueTest {
     }
 
     @Test
+    public void defaultRetryBudgetMatchesB1ProReferenceWriteBehavior() {
+        ManualScheduler scheduler = new ManualScheduler();
+        RecordingTransport transport = new RecordingTransport();
+        List<String> accepted = new ArrayList<>();
+        BleWriteQueue queue = new BleWriteQueue(transport, scheduler);
+
+        for (int i = 0; i < BleWriteQueue.DEFAULT_MAX_ATTEMPTS - 1; i += 1) {
+            transport.results.add(false);
+        }
+        transport.results.add(true);
+
+        queue.enqueue(new byte[] { 0x55 }, "ble-write-raster-row-buffer-retry", callback("accepted", accepted));
+        scheduler.runAll();
+
+        assertEquals(30, transport.stages.size());
+        assertEquals("accepted", String.join(",", accepted));
+        assertEquals(4L, BleWriteQueue.DEFAULT_RETRY_DELAY_MS);
+        assertEquals(20L, BleWriteQueue.DEFAULT_FALLBACK_COMPLETE_DELAY_MS);
+    }
+
+    @Test
     public void characteristicWriteCallbackDoesNotRaceFallbackCompletion() {
         ManualScheduler scheduler = new ManualScheduler();
         RecordingTransport transport = new RecordingTransport(true, true, true);

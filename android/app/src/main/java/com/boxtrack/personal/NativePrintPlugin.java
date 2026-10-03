@@ -71,11 +71,20 @@ public class NativePrintPlugin extends Plugin {
     private static final long PRINT_CONFIRM_TIMEOUT_MS = 25_000L;
     private static final long PRINT_STATUS_POLL_MS = 750L;
     private static final long INITIAL_CONNECTION_SETTLE_MS = 200L;
+    private static final int BLE_WRITE_MAX_ATTEMPTS = 30;
+    private static final long BLE_WRITE_RETRY_DELAY_MS = 4L;
+    private static final long BLE_WRITE_PACE_MS = 20L;
     private static final int B1_PRO_RASTER_WIDTH_PX = 576;
     private static final int B1_PRO_RASTER_HEIGHT_PX = 354;
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final BleWriteQueue writeQueue = new BleWriteQueue(this::writeBlePacket, (runnable, delayMs) -> mainHandler.postDelayed(runnable, delayMs));
+    private final BleWriteQueue writeQueue = new BleWriteQueue(
+            this::writeBlePacket,
+            (runnable, delayMs) -> mainHandler.postDelayed(runnable, delayMs),
+            BLE_WRITE_MAX_ATTEMPTS,
+            BLE_WRITE_RETRY_DELAY_MS,
+            BLE_WRITE_PACE_MS
+    );
     private final Map<String, JSObject> discoveredDevices = new LinkedHashMap<>();
     private final Map<Integer, ResponseWaiter> responseWaiters = new HashMap<>();
 
@@ -851,6 +860,9 @@ public class NativePrintPlugin extends Plugin {
         if (deviceId != null) appendDiagnosticPart(builder, "device", deviceId);
         if (gattStatus != null) appendDiagnosticPart(builder, "gattStatus", String.valueOf(gattStatus));
         if (bleState != null) appendDiagnosticPart(builder, "bleState", String.valueOf(bleState));
+        appendDiagnosticPart(builder, "bleWriteMaxAttempts", String.valueOf(BLE_WRITE_MAX_ATTEMPTS));
+        appendDiagnosticPart(builder, "bleWriteRetryMs", String.valueOf(BLE_WRITE_RETRY_DELAY_MS));
+        appendDiagnosticPart(builder, "bleWritePaceMs", String.valueOf(BLE_WRITE_PACE_MS));
         return builder.length() == 0 ? null : builder.toString();
     }
 
