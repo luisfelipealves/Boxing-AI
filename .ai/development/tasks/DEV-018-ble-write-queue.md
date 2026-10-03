@@ -2,7 +2,7 @@
 id: DEV-018
 type: development
 title: Serialize NIIMBOT B1 Pro BLE writes with bounded retry
-status: IMPLEMENTED
+status: HUMAN_TESTING
 source:
   - PD-010
   - Human feedback after v0.0.26: "BLE write was not accepted by Android ... nothing printed"
@@ -13,7 +13,7 @@ assigned_agent: Hermes
 branch: agent/dev-018-ble-write-queue
 worktree: /home/felipe/.hermes/cache/scratch/boxing-ai-dev-018-ble-write-queue
 created_at: 2026-10-03T03:51:09Z
-updated_at: 2026-10-03T03:51:09Z
+updated_at: 2026-10-03T04:01:12Z
 completed_at: 2026-10-03T03:51:09Z
 ---
 
@@ -66,3 +66,15 @@ DEV-017 must be present because this task builds on the fixed WebView raster ren
 # Implementation Handoff
 
 Handoff: `.ai/development/handoffs/DEV-018-implementation-handoff.md`
+
+# Review
+
+Review: `.ai/development/reviews/DEV-018-review.md`
+
+# Integration Handoff
+
+Handoff: `.ai/development/integration/DEV-018-integration-handoff.md`
+
+# Human Testing
+
+Status: ready for human testing.
