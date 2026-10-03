@@ -94,6 +94,23 @@ describe('Niimbot B1 Pro print UI helpers', () => {
     ).toBe('pending');
   });
 
+  it('does not mark unattempted later checklist rows complete after a failure', () => {
+    const baseState = {
+      currentStep: 'failure' as const,
+      activeStep: null,
+      failedStep: 'rendering' as const,
+      isBusy: false,
+      hasStarted: true,
+    };
+
+    expect(getNiimbotChecklistStepState({ ...baseState, stepId: 'permission/setup' })).toBe('complete');
+    expect(getNiimbotChecklistStepState({ ...baseState, stepId: 'scanning' })).toBe('complete');
+    expect(getNiimbotChecklistStepState({ ...baseState, stepId: 'identifying' })).toBe('complete');
+    expect(getNiimbotChecklistStepState({ ...baseState, stepId: 'rendering' })).toBe('failed');
+    expect(getNiimbotChecklistStepState({ ...baseState, stepId: 'sending' })).toBe('pending');
+    expect(getNiimbotChecklistStepState({ ...baseState, stepId: 'printing/confirming' })).toBe('pending');
+  });
+
   it('formats native BLE diagnostic details for user-visible troubleshooting', () => {
     expect(
       getNiimbotBleDiagnostic({

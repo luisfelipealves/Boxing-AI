@@ -47,8 +47,14 @@ export const getNiimbotChecklistStepState = ({
   if (!hasStarted) return 'pending';
   if (currentStep === 'success') return 'complete';
 
-  const currentOrder = NIIMBOT_STEP_ORDER.get(currentStep);
   const stepOrder = NIIMBOT_STEP_ORDER.get(stepId);
+  if (currentStep === 'failure') {
+    const failedOrder = failedStep ? NIIMBOT_STEP_ORDER.get(failedStep) : undefined;
+    if (typeof failedOrder === 'number' && typeof stepOrder === 'number' && stepOrder < failedOrder) return 'complete';
+    return 'pending';
+  }
+
+  const currentOrder = NIIMBOT_STEP_ORDER.get(currentStep);
   if (typeof currentOrder === 'number' && typeof stepOrder === 'number' && stepOrder < currentOrder) return 'complete';
   if (!isBusy && currentStep === stepId && !failedStep) return 'complete';
   return 'pending';

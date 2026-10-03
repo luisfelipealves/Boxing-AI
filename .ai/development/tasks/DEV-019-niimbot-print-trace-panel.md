@@ -13,8 +13,8 @@ assigned_agent: Hermes
 branch: agent/dev-019-niimbot-print-trace
 worktree: /home/felipe/projetos/Boxing-AI/worktrees/dev-019-niimbot-print-trace
 started_at: 2026-10-03T06:45:00Z
-updated_at: 2026-10-03T06:56:00Z
-completed_at: 2026-10-03T06:56:00Z
+updated_at: 2026-10-03T06:58:52Z
+completed_at: 2026-10-03T06:58:52Z
 ---
 
 # Objective
@@ -74,8 +74,9 @@ DEV-018 must be present because this trace panel is for the latest serialized BL
 
 - `npm test -- --run services/niimbotBleFlowSource.test.ts services/labelRasterRenderer.test.ts` — passed, 2 files / 13 tests.
 - Independent review found blocking checklist-state issues; fixed by extracting `getNiimbotChecklistStepState`, tracking whether flow has started, and passing the explicit failed step to `setBridgeError`.
-- `npm test -- --run services/niimbotUi.test.ts services/niimbotBleFlowSource.test.ts services/labelRasterRenderer.test.ts` — passed, 3 files / 20 tests.
-- `npm run test` — passed, 7 files / 42 tests after `npm ci` restored worktree-local dependencies.
+- Re-review found that post-failure rows after the failed step still appeared complete; fixed by treating `currentStep: 'failure'` specially so only rows before the explicit failed step complete and later rows stay pending.
+- `npm test -- --run services/niimbotUi.test.ts services/niimbotBleFlowSource.test.ts services/labelRasterRenderer.test.ts` — passed, 3 files / 21 tests.
+- `npm run test` — passed, 7 files / 43 tests after `npm ci` restored worktree-local dependencies.
 - `npm run build` — passed with existing Vite chunk-size and Browserslist-age warnings.
 - `npx cap sync android` — passed; generated worktree-relative Gradle path was not committed.
 - `cd android && ./gradlew :app:testDebugUnitTest` — VALIDATION_NOT_RUN: Android SDK location is not configured (`ANDROID_HOME` unset and no `android/local.properties` sdk.dir).
