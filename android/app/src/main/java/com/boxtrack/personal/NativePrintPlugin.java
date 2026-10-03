@@ -70,6 +70,7 @@ public class NativePrintPlugin extends Plugin {
     private static final long PAGE_END_TIMEOUT_MS = 12_000L;
     private static final long PRINT_CONFIRM_TIMEOUT_MS = 25_000L;
     private static final long PRINT_STATUS_POLL_MS = 750L;
+    private static final long INITIAL_CONNECTION_SETTLE_MS = 200L;
     private static final int B1_PRO_RASTER_WIDTH_PX = 576;
     private static final int B1_PRO_RASTER_HEIGHT_PX = 354;
 
@@ -260,19 +261,32 @@ public class NativePrintPlugin extends Plugin {
         activePrintSession = session;
         session.stage = "sending";
         try {
-            sendWait(NiimbotV4Protocol.COMMAND_SET_DENSITY, new byte[] { 0x03 }, NiimbotV4Protocol.RESPONSE_SET_DENSITY, COMMAND_TIMEOUT_MS, "ble-write-set-density", densityResponse -> {
-                logUnconfirmedSetupResponse(densityResponse, "SetDensity");
-                sendWait(NiimbotV4Protocol.COMMAND_SET_LABEL_TYPE, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_SET_LABEL_TYPE, COMMAND_TIMEOUT_MS, "ble-write-set-label-type", labelTypeResponse -> {
-                    logUnconfirmedSetupResponse(labelTypeResponse, "SetLabelType");
-                    sendWait(NiimbotV4Protocol.COMMAND_PRINT_START, NiimbotV4Protocol.printStartPayload(copies, 1), NiimbotV4Protocol.RESPONSE_PRINT_START, COMMAND_TIMEOUT_MS, "ble-write-print-start", startResponse -> {
-                        logUnconfirmedSetupResponse(startResponse, "PrintStart");
-                        sendPrintStatusProbeThenPage(session, packedRaster, printTimeoutMs);
-                    }, stage -> failPrint(session, "transmission-failed", "BLE write was not accepted by Android while starting the print job.", true, stage));
-                }, stage -> failPrint(session, "transmission-failed", "BLE write was not accepted by Android while setting the label type.", true, stage));
-            }, stage -> failPrint(session, "transmission-failed", "BLE write was not accepted by Android while setting print density.", true, stage));
+            enqueueWrite(NiimbotV4Protocol.INITIAL_CONNECTION_PACKET, "ble-write-initial-connect", new WriteCallback() {
+                @Override public void onAccepted() {
+                    mainHandler.postDelayed(() -> sendPrintSetup(session, packedRaster, copies, printTimeoutMs), INITIAL_CONNECTION_SETTLE_MS);
+                }
+
+                @Override public void onRejected(String stage) {
+                    failPrint(session, "transmission-failed", "BLE write was not accepted by Android while sending the NIIMBOT initial connection packet.", true, stage);
+                }
+            });
         } catch (Exception exception) {
             failPrint(session, "transmission-failed", messageOrDefault(exception, "Unable to start NIIMBOT B1 Pro print transfer."), true);
         }
+    }
+
+    private void sendPrintSetup(PrintSession session, byte[] packedRaster, int copies, long printTimeoutMs) {
+        if (session.resolved) return;
+        sendWait(NiimbotV4Protocol.COMMAND_SET_DENSITY, new byte[] { 0x03 }, NiimbotV4Protocol.RESPONSE_SET_DENSITY, COMMAND_TIMEOUT_MS, "ble-write-set-density", densityResponse -> {
+            logUnconfirmedSetupResponse(densityResponse, "SetDensity");
+            sendWait(NiimbotV4Protocol.COMMAND_SET_LABEL_TYPE, new byte[] { 0x01 }, NiimbotV4Protocol.RESPONSE_SET_LABEL_TYPE, COMMAND_TIMEOUT_MS, "ble-write-set-label-type", labelTypeResponse -> {
+                logUnconfirmedSetupResponse(labelTypeResponse, "SetLabelType");
+                sendWait(NiimbotV4Protocol.COMMAND_PRINT_START, NiimbotV4Protocol.printStartPayload(copies, 1), NiimbotV4Protocol.RESPONSE_PRINT_START, COMMAND_TIMEOUT_MS, "ble-write-print-start", startResponse -> {
+                    logUnconfirmedSetupResponse(startResponse, "PrintStart");
+                    sendPrintStatusProbeThenPage(session, packedRaster, printTimeoutMs);
+                }, stage -> failPrint(session, "transmission-failed", "BLE write was not accepted by Android while starting the print job.", true, stage));
+            }, stage -> failPrint(session, "transmission-failed", "BLE write was not accepted by Android while setting the label type.", true, stage));
+        }, stage -> failPrint(session, "transmission-failed", "BLE write was not accepted by Android while setting print density.", true, stage));
     }
 
     private void sendPrintStatusProbeThenPage(PrintSession session, byte[] packedRaster, long printTimeoutMs) {
