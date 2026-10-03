@@ -2,7 +2,7 @@
 id: DEV-017
 type: development
 title: Remove Buffer dependency from B1 Pro raster base64 encoding
-status: IMPLEMENTED
+status: HUMAN_TESTING
 source:
   - PD-010
   - Human feedback after v0.0.25: "Label rendering is not ready ... Buffer is not defined"
@@ -13,7 +13,7 @@ assigned_agent: Hermes
 branch: agent/dev-017-buffer-global
 worktree: /home/felipe/.hermes/cache/scratch/boxing-ai-dev-017-buffer-global
 created_at: 2026-10-03T03:32:10Z
-updated_at: 2026-10-03T03:32:10Z
+updated_at: 2026-10-03T03:34:00Z
 completed_at: 2026-10-03T03:32:10Z
 ---
 
@@ -63,3 +63,11 @@ DEV-016 must be present because this task follows the first WebView raster-rende
 # Implementation Handoff
 
 Handoff: `.ai/development/handoffs/DEV-017-implementation-handoff.md`
+
+# Integration Handoff
+
+Handoff: `.ai/development/integration/DEV-017-integration-handoff.md`
+
+# Human Testing
+
+Status: ready for human testing.
