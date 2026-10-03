@@ -2,7 +2,7 @@
 id: DEV-020
 type: development
 title: Fix NIIMBOT B1 Pro PageEnd timeout with no physical print
-status: IMPLEMENTED
+status: HUMAN_TESTING
 source:
   - PD-010
   - Human hardware feedback: "nada foi impresso" after `unconfirmed-print: Timed out waiting for NIIMBOT PageEnd confirmation`
@@ -13,7 +13,7 @@ assigned_agent: Hermes
 branch: agent/dev-020-niimbot-pageend-timeout
 worktree: /home/felipe/projetos/Boxing-AI/worktrees/dev-020-niimbot-pageend-timeout
 started_at: 2026-10-03T07:15:52Z
-updated_at: 2026-10-03T07:19:34Z
+updated_at: 2026-10-03T07:22:35Z
 completed_at: 2026-10-03T07:19:34Z
 ---
 
@@ -96,4 +96,8 @@ Worktree: `/home/felipe/projetos/Boxing-AI/worktrees/dev-020-niimbot-pageend-tim
 
 Implementation commit: `0f3420b2c17c87eabe6c758efbff58d0ab983cdb`
 
-Status: implemented; awaiting independent review and hardware validation.
+Review: `.ai/development/reviews/DEV-020-review.md` — PASS, no blocking findings.
+
+Human testing handoff: `.ai/development/handoffs/DEV-020-human-testing.md`
+
+Status: HUMAN_TESTING; not merged. Awaiting B1 Pro hardware validation and explicit human merge approval.
