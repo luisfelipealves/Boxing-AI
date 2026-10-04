@@ -2,7 +2,7 @@
 id: DEV-030
 type: development
 title: Remove NIIMBOT trace UI and automate B1 Pro setup
-status: IMPLEMENTED
+status: HUMAN_TESTING
 source:
   - PD-011
 depends_on: []
@@ -11,8 +11,9 @@ assigned_agent: Developer-DEV-030
 branch: agent/dev-030-niimbot-auto-pairing
 worktree: /home/felipe/.hermes/cache/scratch/boxing-ai-dev-030-auto-pairing
 created_at: 2026-10-04
-updated_at: 2026-10-04T11:35:37Z
+updated_at: 2026-10-04T11:37:48Z
 completed_at: 2026-10-04T11:35:37Z
+reviewed_at: 2026-10-04T11:37:48Z
 ---
 
 # Objective
@@ -97,3 +98,26 @@ Commit: `0b54f51799ae8b050f6517e8d4d3f91739c9cc47`
 - `npm run build` — passed with existing Vite chunk-size and Browserslist warnings.
 - `npx cap sync android` — passed.
 - `(cd android && ./gradlew :app:assembleDebug)` — passed after configuring local SDK path.
+
+# Review
+
+- PASS — `.ai/development/reviews/DEV-030-niimbot-automatic-pairing-review.md`
+- Non-blocking: tests are source guards rather than full behavioral React/plugin tests.
+
+# Human Testing
+
+Status: READY
+
+Manual validation:
+
+1. Install the DEV-030 Android build.
+2. Open a box label print screen.
+3. Verify there is no `NIIMBOT print trace` panel or trace `Clear` button.
+4. If Bluetooth permission is not granted, tap `Grant Bluetooth access`.
+5. Verify the checklist automatically advances to scanning without pressing a separate Scan button.
+6. With one NIIMBOT B1 Pro nearby, verify the app automatically prepares/selects it without tapping a candidate.
+7. Verify the selected printer card and `50 × 30 mm` profile remain visible.
+8. Print the current label and verify success or actionable recovery messaging.
+9. If possible, test no-printer-found by turning the printer off and retrying setup.
+
+Merge status: NOT MERGED — awaiting explicit human approval.
