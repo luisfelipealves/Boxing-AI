@@ -46,15 +46,30 @@ describe('NIIMBOT BLE App flow source guards', () => {
     expect(appSource).toContain('renderStepIcon(stepState)');
   });
 
-  it('renders a print trace panel and logs render failures with the thrown message', () => {
+  it('does not render the temporary NIIMBOT trace panel or keep normal trace UI state', () => {
     const printBody = getFunctionBody('printCurrentLabel');
 
-    expect(appSource).toContain('NIIMBOT print trace');
-    expect(appSource).toContain('const appendTrace = (message: string, detail?: string) =>');
-    expect(appSource).toContain('Print trace entries are shown newest last for hardware debugging.');
-    expect(printBody).toContain("setFlowStep('rendering', 'Render label raster started'");
-    expect(printBody).toContain("appendTrace('Render label raster failed'");
+    expect(appSource).not.toContain('NIIMBOT print trace');
+    expect(appSource).not.toContain('Print trace entries are shown newest last for hardware debugging.');
+    expect(appSource).not.toContain('traceEntries');
+    expect(appSource).not.toContain('appendTrace');
+    expect(appSource).not.toContain('niimbotTrace');
+    expect(printBody).toContain("setFlowStep('rendering')");
     expect(printBody).toContain('renderError instanceof Error ? renderError.message');
+  });
+
+  it('automatically scans after Bluetooth permission and auto-prepares exactly one candidate only', () => {
+    const permissionBody = getFunctionBody('requestPermissions');
+    const scanBody = getFunctionBody('scanForPrinters');
+
+    expect(appSource).toContain('const automaticSetupAttemptedRef = useRef(false);');
+    expect(appSource).toContain('scanForPrinters({ automatic: true })');
+    expect(permissionBody).toContain('isNiimbotPermissionGranted(result.value)');
+    expect(permissionBody).toContain('scanForPrinters({ automatic: true })');
+    expect(scanBody).toContain('if (result.value.length === 1)');
+    expect(scanBody).toContain('await identifySelectedPrinter(result.value[0]);');
+    expect(scanBody).toContain('if (result.value.length === 0)');
+    expect(scanBody).toContain('setBridgeError({ code: \'no-printer-found\'');
   });
 
   it('uses completed, active, failed, and pending styles for B1 Pro checklist rows', () => {

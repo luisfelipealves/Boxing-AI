@@ -70,13 +70,6 @@ import {
 
 const NiimbotBlePrinter = registerPlugin<NiimbotNativeBlePrinterPlugin>('NiimbotBlePrinter');
 
-interface NiimbotTraceEntry {
-  readonly id: number;
-  readonly time: string;
-  readonly message: string;
-  readonly detail?: string;
-}
-
 const NIIMBOT_SETUP_STEPS: readonly { readonly id: NiimbotPrintProgressStep; readonly label: string }[] = [
   { id: 'permission/setup', label: 'Grant Bluetooth access' },
   { id: 'scanning', label: 'Scan for NIIMBOT B1 Pro' },
@@ -85,6 +78,10 @@ const NIIMBOT_SETUP_STEPS: readonly { readonly id: NiimbotPrintProgressStep; rea
   { id: 'sending', label: 'Send over BLE' },
   { id: 'printing/confirming', label: 'Confirm print result' },
 ];
+
+type NiimbotScanOptions = {
+  readonly automatic?: boolean;
+};
 
 const getBlockedDeleteMessage = (error: unknown): string | undefined => {
   if (!storage.isDeleteBlockedByDependenciesError(error)) return undefined;
@@ -1453,7 +1450,7 @@ const BoxLabelPage = () => {
   const [flowStarted, setFlowStarted] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [lastLabelSnapshot, setLastLabelSnapshot] = useState<NiimbotLabelSnapshot | null>(null);
-  const [traceEntries, setTraceEntries] = useState<readonly NiimbotTraceEntry[]>([]);
+  const automaticSetupAttemptedRef = useRef(false);
   const isAndroid = Capacitor.getPlatform() === 'android';
   const isPluginAvailable = Capacitor.isPluginAvailable('NiimbotBlePrinter');
 
@@ -1465,7 +1462,7 @@ const BoxLabelPage = () => {
   }, [id]);
 
   useEffect(() => {
-    if (!isAndroid || !isPluginAvailable) return;
+    if (!box || !isAndroid || !isPluginAvailable) return;
     let cancelled = false;
     const loadPrinterState = async () => {
       setStep('permission/setup');
@@ -1478,10 +1475,20 @@ const BoxLabelPage = () => {
       if (selectedResult.ok) setSelectedPrinter(selectedResult.value);
       if (!permissionResult.ok) setError(permissionResult.error);
       if (!selectedResult.ok) setError(selectedResult.error);
+      if (
+        permissionResult.ok &&
+        isNiimbotPermissionGranted(permissionResult.value) &&
+        selectedResult.ok &&
+        !selectedResult.value &&
+        !automaticSetupAttemptedRef.current
+      ) {
+        automaticSetupAttemptedRef.current = true;
+        void scanForPrinters({ automatic: true });
+      }
     };
     loadPrinterState();
     return () => { cancelled = true; };
-  }, [isAndroid, isPluginAvailable]);
+  }, [box, isAndroid, isPluginAvailable]);
 
   if (!id || !box) return <PageLoader />;
 
@@ -1507,22 +1514,9 @@ const BoxLabelPage = () => {
   const visibleBleDiagnostic = getNiimbotBleDiagnostic(error);
   const activeStep = isBusy ? step : null;
 
-  const appendTrace = (message: string, detail?: string) => {
-    setTraceEntries(previous => [
-      ...previous,
-      {
-        id: Date.now() + previous.length,
-        time: new Date().toLocaleTimeString(),
-        message,
-        detail,
-      },
-    ].slice(-80));
-  };
-
-  const setFlowStep = (nextStep: NiimbotPrintProgressStep, traceMessage: string, detail?: string) => {
+  const setFlowStep = (nextStep: NiimbotPrintProgressStep) => {
     setFlowStarted(true);
     setStep(nextStep);
-    appendTrace(traceMessage, detail);
   };
 
   const getStepState = (stepId: NiimbotPrintProgressStep): NiimbotChecklistState => {
@@ -1568,7 +1562,6 @@ const BoxLabelPage = () => {
     setError(bridgeError);
     setFailedStep(failedAt);
     setStep('failure');
-    appendTrace('Flow failed', `${bridgeError.code}: ${bridgeError.message}${bridgeError.diagnostic ? ` · ${bridgeError.diagnostic}` : ''}`);
   };
 
   const requestPermissions = async () => {
@@ -1576,7 +1569,7 @@ const BoxLabelPage = () => {
     setIsBusy(true);
     setError(null);
     setFailedStep(null);
-    setFlowStep('permission/setup', 'Request Bluetooth permissions started');
+    setFlowStep('permission/setup');
     try {
       const result = await NiimbotBlePrinter.requestPermissions();
       if (!result.ok) {
@@ -1584,29 +1577,38 @@ const BoxLabelPage = () => {
         return;
       }
       setPermissions(result.value);
-      appendTrace('Request Bluetooth permissions completed', `scan=${result.value.bluetoothScan}; connect=${result.value.bluetoothConnect}`);
+      if (isNiimbotPermissionGranted(result.value) && !selectedPrinter) {
+        automaticSetupAttemptedRef.current = true;
+        await scanForPrinters({ automatic: true });
+      }
     } finally {
       setIsBusy(false);
     }
   };
 
-  const scanForPrinters = async () => {
+  const scanForPrinters = async (_options?: NiimbotScanOptions) => {
     if (!isPluginAvailable) return;
     setIsBusy(true);
     setError(null);
     setFailedStep(null);
-    setFlowStep('scanning', 'Scan for NIIMBOT B1 Pro started', `service=${profile.serviceUuid}; timeoutMs=10000`);
+    setFlowStep('scanning');
     try {
       const result = await NiimbotBlePrinter.scan({ serviceUuid: profile.serviceUuid, timeoutMs: 10_000 });
       if (!result.ok) {
         setBridgeError(result.error, 'scanning');
         return;
       }
-      setCandidates(result.value);
-      appendTrace('Scan for NIIMBOT B1 Pro completed', `candidates=${result.value.length}`);
       if (result.value.length === 0) {
+        setCandidates([]);
         setBridgeError({ code: 'no-printer-found', message: 'No NIIMBOT B1 Pro candidates were found.', recoverable: true }, 'scanning');
+        return;
       }
+      if (result.value.length === 1) {
+        setCandidates([]);
+        await identifySelectedPrinter(result.value[0]);
+        return;
+      }
+      setCandidates(result.value);
     } finally {
       setIsBusy(false);
     }
@@ -1616,7 +1618,7 @@ const BoxLabelPage = () => {
     setIsBusy(true);
     setError(null);
     setFailedStep(null);
-    setFlowStep('identifying', 'Prepare selected B1 Pro started', `${device.name || 'NIIMBOT candidate'} · ${device.address || device.deviceId}`);
+    setFlowStep('identifying');
     try {
       const identifyResult = await NiimbotBlePrinter.identify({ deviceId: device.deviceId, timeoutMs: 10_000 });
       if (!identifyResult.ok) {
@@ -1624,7 +1626,7 @@ const BoxLabelPage = () => {
         return;
       }
       setSelectedPrinter(identifyResult.value);
-      appendTrace('Prepare selected B1 Pro completed', `${identifyResult.value.displayName}; model=${identifyResult.value.modelId}; profile=${identifyResult.value.profile.id}`);
+      setCandidates([]);
     } finally {
       setIsBusy(false);
     }
@@ -1632,7 +1634,6 @@ const BoxLabelPage = () => {
 
   const reconnectSelectedPrinter = async () => {
     if (!selectedPrinter) return;
-    appendTrace('Reconnect selected B1 Pro requested', `${selectedPrinter.displayName} · ${selectedPrinter.reconnectId}`);
     await identifySelectedPrinter({
       deviceId: selectedPrinter.reconnectId,
       name: selectedPrinter.displayName,
@@ -1645,7 +1646,7 @@ const BoxLabelPage = () => {
     setIsBusy(true);
     setError(null);
     setFailedStep(null);
-    setFlowStep('permission/setup', 'Forget selected B1 Pro started');
+    setFlowStep('permission/setup');
     try {
       const result = await NiimbotBlePrinter.forgetSelectedPrinter();
       if (!result.ok) {
@@ -1655,7 +1656,7 @@ const BoxLabelPage = () => {
       setSelectedPrinter(null);
       setCandidates([]);
       setLastLabelSnapshot(null);
-      appendTrace('Forget selected B1 Pro completed');
+      automaticSetupAttemptedRef.current = false;
     } finally {
       setIsBusy(false);
     }
@@ -1668,9 +1669,8 @@ const BoxLabelPage = () => {
     setIsBusy(true);
     setError(null);
     setFailedStep(null);
-    appendTrace('Print current label requested', `box=${snapshot.boxNumber ?? 'missing'}; printer=${selectedPrinter.displayName}; retry=${lastLabelSnapshot ? 'yes' : 'no'}`);
     try {
-      setFlowStep('rendering', 'Render label raster started', `profile=${profile.id}; target=${profile.rasterWidthPx}×${profile.rasterHeightPx}`);
+      setFlowStep('rendering');
       let labelRaster: ReturnType<typeof renderBoxLabelRaster>;
       try {
         labelRaster = renderBoxLabelRaster({
@@ -1687,7 +1687,6 @@ const BoxLabelPage = () => {
           profile,
         });
       } catch (renderError) {
-        appendTrace('Render label raster failed', renderError instanceof Error ? renderError.message : 'Unknown render error');
         setBridgeError({
           code: 'invalid-raster',
           message: renderError instanceof Error ? renderError.message : 'Unable to render the 50 × 30 mm B1 Pro label raster.',
@@ -1695,19 +1694,17 @@ const BoxLabelPage = () => {
         }, 'rendering');
         return;
       }
-      appendTrace('Render label raster completed', `${labelRaster.widthPx}×${labelRaster.heightPx}; bytesPerRow=${labelRaster.bytesPerRow}; base64Length=${labelRaster.rasterBase64.length}`);
       const request = {
         ...buildNiimbotPrintRequest(selectedPrinter.reconnectId, snapshot),
         rasterBase64: labelRaster.rasterBase64,
       };
-      setFlowStep('sending', 'Send label over BLE started', `device=${request.deviceId}; copies=${request.copies}`);
+      setFlowStep('sending');
       const result = await NiimbotBlePrinter.printLabel(request);
       if (!result.ok) {
         setBridgeError(result.error, 'sending');
         return;
       }
-      appendTrace('Send label over BLE completed', `confirmed=${result.value.confirmed ? 'yes' : 'no'}`);
-      setFlowStep(result.value.confirmed ? 'success' : 'printing/confirming', result.value.confirmed ? 'Print confirmed by B1 Pro' : 'Print confirmation missing');
+      setFlowStep(result.value.confirmed ? 'success' : 'printing/confirming');
       if (!result.value.confirmed) {
         setBridgeError({
           code: 'unconfirmed-print',
@@ -1723,7 +1720,6 @@ const BoxLabelPage = () => {
 
   const retrySameLabel = async () => {
     if (!selectedPrinter || !lastLabelSnapshot) return;
-    appendTrace('Retry same label requested', `box=${lastLabelSnapshot.boxNumber ?? 'missing'}; printer=${selectedPrinter.displayName}`);
     await printCurrentLabel();
   };
 
@@ -1831,14 +1827,14 @@ const BoxLabelPage = () => {
                 <p>Model id {selectedPrinter.modelId} · {selectedPrinter.profile.labelName} · {selectedPrinter.reconnectId}</p>
                 <div className="grid grid-cols-3 gap-2 mt-3">
                   <button onClick={reconnectSelectedPrinter} disabled={isBusy} className="bg-white/80 dark:bg-gray-900/80 py-2 rounded-lg font-semibold disabled:opacity-50">Reconnect</button>
-                  <button onClick={scanForPrinters} disabled={isBusy} className="bg-white/80 dark:bg-gray-900/80 py-2 rounded-lg font-semibold disabled:opacity-50">Change</button>
+                  <button onClick={() => scanForPrinters()} disabled={isBusy} className="bg-white/80 dark:bg-gray-900/80 py-2 rounded-lg font-semibold disabled:opacity-50">Change</button>
                   <button onClick={forgetPrinter} disabled={isBusy} className="bg-white/80 dark:bg-gray-900/80 py-2 rounded-lg font-semibold text-red-600 disabled:opacity-50">Forget</button>
                 </div>
               </div>
             )}
 
             <button
-              onClick={scanForPrinters}
+              onClick={() => scanForPrinters()}
               disabled={isBusy || !isNiimbotPermissionGranted(permissions)}
               className="w-full bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 font-bold py-3 px-4 rounded-xl hover:opacity-90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -1885,31 +1881,6 @@ const BoxLabelPage = () => {
                 Print confirmed by the NIIMBOT B1 Pro.
               </div>
             )}
-
-            <div className="bg-slate-950 text-slate-100 p-4 rounded-2xl border border-slate-800 shadow-sm">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <h3 className="font-semibold">NIIMBOT print trace</h3>
-                  <p className="text-xs text-slate-400 mt-1">Print trace entries are shown newest last for hardware debugging.</p>
-                </div>
-                <button
-                  onClick={() => setTraceEntries([])}
-                  className="text-xs px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200"
-                >
-                  Clear
-                </button>
-              </div>
-              <div className="max-h-56 overflow-y-auto space-y-2 text-xs font-mono">
-                {traceEntries.length === 0 ? (
-                  <p className="text-slate-500">No print trace entries yet.</p>
-                ) : traceEntries.map(entry => (
-                  <div key={entry.id} className="border-l-2 border-slate-700 pl-2">
-                    <p><span className="text-slate-500">{entry.time}</span> <span className="text-slate-100">{entry.message}</span></p>
-                    {entry.detail && <p className="text-slate-400 break-all">{entry.detail}</p>}
-                  </div>
-                ))}
-              </div>
-            </div>
 
             <button
               onClick={printCurrentLabel}
