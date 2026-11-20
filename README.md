@@ -1,60 +1,62 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Boxing AI / BoxTrack AI 📦
 
-# BoxTrack AI
+**A local-first inventory for locations, boxes and the items inside them.** Built as a React web app/PWA with an Android wrapper and optional AI-assisted item entry.
 
-Aplicação pessoal para organizar caixas, locais e itens domésticos.
+![BoxTrack AI project banner](https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6)
 
-## Armazenamento
+> A real application screenshot has not yet been added to this repository. The image above is its existing project banner.
 
-Os dados são guardados localmente no navegador usando SQLite via IndexedDB. Não há conta, sincronização entre dispositivos ou API obrigatória.
+## Highlights
 
-Antes de limpar os dados do navegador, faça uma cópia de segurança pelo recurso de exportação quando ele estiver disponível.
+- Organize `location → box → item`, with box categories and QR scanning.
+- Prevent deleting a location that contains boxes or a box that contains items.
+- Persist SQLite data locally through `sql.js` and IndexedDB, without a required account or server.
+- Optionally extract item details from image or audio with Gemini; ask questions about the inventory.
+- Render labels and connect to a NiiMBOT B1 Pro through the Android Bluetooth printing path. Printer behavior needs verification on the physical device.
 
-## Execução local
+## Architecture
 
-Pré-requisito: Node.js.
-
-```bash
-npm install
-npm run dev
+```mermaid
+flowchart TD
+    A["React + TypeScript UI"] --> B["Storage service"]
+    B --> C["SQLite / sql.js"]
+    C --> D["IndexedDB snapshot"]
+    A --> E["Optional Gemini services"]
+    A --> F["QR and label rendering"]
+    F --> G["Capacitor Android plugin"]
+    G --> H["BLE printer"]
 ```
 
-O assistente de IA é opcional. Para fornecê-la antecipadamente, copie `.env.example` para `.env.local` e preencha `VITE_GOOGLE_GENAI_API_KEY` com uma chave própria. Se essa variável não existir, a aplicação pedirá a chave ao abrir e guardará o valor apenas no armazenamento local do dispositivo.
+`App.tsx` orchestrates the interface. `services/storageService.ts` owns the database and integrity rules; `services/geminiService.ts` handles optional AI calls; `components/` contains scan and voice input; `services/labelRasterRenderer.ts` and the Android Java classes implement the print path. Tests cover storage, AI services, label rendering and BLE protocol behavior. The AI key is used on the client and can be exposed to a user of the app; restrict its permissions and quota accordingly.
 
-A chave fica acessível no navegador e no APK, portanto não use uma chave pessoal com limites ou permissões que não esteja disposto a expor.
+## Run and test
 
-## Android
+Prerequisites: Node.js/npm. AI features require a personal Gemini API key; inventory works without it.
 
-O projeto também possui um app Android gerado com Capacitor.
+```bash
+git clone https://github.com/luisfelipealves/Boxing-AI.git
+cd Boxing-AI
+npm ci
+npm run dev
+npm test
+npm run build
+```
 
-Para atualizar o projeto nativo depois de alterar a aplicação web:
+For Android, install the Android SDK and JDK required by the Gradle project, then:
 
 ```bash
 npm run build
 npx cap sync android
-```
-
-Para gerar uma versão local de teste:
-
-```bash
 cd android
 ./gradlew assembleDebug
 ```
 
-O workflow do GitHub Actions é executado quando uma tag `v*` é enviada. Ele gera APK e AAB e cria uma GitHub Release automaticamente:
+The existing [Android release workflow](.github/workflows/android.yml) builds on `v*` tags. Signed releases require `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` repository secrets; retain the same keystore for future updates. The project [README history](.ai/README.md) and `.ai/product/` and `.ai/development/` folders record the team workflow and decisions.
 
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
+## How we built it
 
-Para assinar a versão release, configure estes Secrets no GitHub:
+I supplied the real inventory use cases and made product decisions, including safe deletion and printer requirements. We split the work into product decisions, development tasks and agent branches; implemented in small steps; ran targeted tests and builds; and used physical-device testing as a gate before merging device features. The repository's `.ai/` artifacts preserve questions, handoffs, reviews and human approvals rather than relying on chat history.
 
-- `ANDROID_KEYSTORE_BASE64`
-- `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
-- `ANDROID_KEY_PASSWORD`
+## Portfolio snapshot
 
-Esses Secrets são obrigatórios para gerar uma versão assinada. A mesma keystore deve ser mantida para que novas versões possam atualizar a instalação anterior e para publicar na Play Store.
+**Role:** product owner and technical direction with AI-assisted engineering. **Highlights:** local SQLite persistence, referential integrity, optional multimodal AI, QR labels, Android/Capacitor and BLE integration.
