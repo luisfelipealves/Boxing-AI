@@ -41,9 +41,11 @@ jobs:
             mkdir -p screenshots
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
             adb shell am start -n com.boxtrack.personal/.MainActivity
-            sleep 8
+            sleep 15
+            adb shell input tap 85 412
+            sleep 3
             adb shell input tap 90 530
-            sleep 4
+            sleep 6
             adb exec-out screencap -p > screenshots/boxing-home.png
             adb shell input tap 269 466
             sleep 3
