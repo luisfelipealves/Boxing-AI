@@ -4,7 +4,11 @@
 
 ![BoxTrack AI project banner](https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6)
 
-> A real application screenshot has not yet been added to this repository. The image above is its existing project banner.
+| Boxes | New box |
+| --- | --- |
+| ![Empty boxes screen on Android emulator](assets/emulator-boxes.png) | ![New box form on Android emulator](assets/emulator-new-box.png) |
+
+*Screenshots from the current Android build in a disposable API 35 emulator. The inventory is empty and optional Gemini setup was skipped; the new-box image shows the on-screen keyboard.*
 
 ## Highlights
 

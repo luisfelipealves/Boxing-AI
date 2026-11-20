@@ -1,0 +1,58 @@
+name: Portfolio screenshots (Android emulator)
+on:
+  push:
+    branches: [docs/emulator-screenshots-20261120]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Build disposable debug APK
+        run: |
+          npm ci
+          npm run build
+          npx cap sync android
+          cd android
+          ./gradlew --no-daemon assembleDebug
+      - run: sudo chmod 666 /dev/kvm
+      - name: Capture running app
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            mkdir -p screenshots
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -n com.boxtrack.personal/.MainActivity
+            sleep 15
+            adb shell input tap 85 412
+            sleep 3
+            adb shell input tap 90 530
+            sleep 6
+            adb exec-out screencap -p > screenshots/boxing-home.png
+            adb shell input tap 269 466
+            sleep 3
+            adb exec-out screencap -p > screenshots/boxing-add-box.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: boxing-emulator-screenshots
+          path: screenshots/*.png
+          if-no-files-found: error
